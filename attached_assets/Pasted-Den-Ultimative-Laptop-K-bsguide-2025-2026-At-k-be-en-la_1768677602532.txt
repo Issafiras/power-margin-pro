@@ -1,0 +1,125 @@
+Den Ultimative Laptop Købsguide (2025/2026) 💻
+
+At købe en laptop handler om at finde flaskehalsene. En Ferrari-motor (CPU) hjælper ikke, hvis du har cykelhjul (langsom RAM/SSD) eller en forrude, der er smurt ind i vaseline (dårlig skærm).
+
+Her er din samlede guide: Først prioriteringen af specs, og derefter det specifikke "Cheat Sheet" til processorer.
+
+DEL 1: Prioriterings-Matrix (Hvad er vigtigst?)
+
+Her er ranglisten fra "Gør-eller-dø" til "Ligegyldigt bling".
+
+Niveau 1: Fundamentet (Det du ikke kan leve uden) 🏗️
+
+Disse ting bestemmer, om computeren føles hurtig om 3 år.
+
+1. RAM (Hukommelse) 🧠
+
+Hvorfor: Hvis du løber tør for RAM, går alt i stå. Det er ligegyldigt, hvor hurtig din processor er, hvis den ikke har plads til at arbejde.
+
+Reglen: 8GB er absolut minimum. 16GB er standarden i dag. 32GB er "nice to have".
+
+Fælden: Mange laptops har loddet RAM fast. Køb nok fra starten!
+
+2. CPU (Processoren) ⚙️
+
+Hvorfor: Den styrer alt. Men moderne processorer er så gode, at selv mellemklassen er rigeligt for 95% af os.
+
+Udfordringen: Lad være med at betale kassen for en "i9", medmindre du kender forskellen. (Se DEL 2 for detaljer).
+
+3. Lagringstype (SSD) 💾
+
+Hvorfor: Hastigheden på disken betyder mere for "snappiness" end CPU'en gør i dagligdagen.
+
+Krav: Det skal være en NVMe SSD. Gå efter minimum 512GB plads.
+
+Niveau 2: Den Daglige Oplevelse 👀
+
+Mange glemmer disse, fordi de ikke står øverst på spec-arket. Det er en kæmpe fejl.
+
+4. Skærmen (Kvalitet > Opløsning) 📺
+
+Lysstyrke: Skal være over 300 nits (helst 400+).
+
+Panel: IPS eller OLED er et krav. Undgå TN-paneler.
+
+Format: 16:10 format (lidt højere skærm) er bedre til arbejde end det brede 16:9.
+
+5. Tastatur og Trackpad ⌨️
+
+Testen: En trackpad af glas er langt bedre end plastik. Et dårligt tastatur driver dig til vanvid.
+
+6. Batteritid (Den ægte tid) 🔋
+
+Virkelighedstjek: Træk altid 30-40% fra producentens tal. "Op til 10 timer" betyder ofte 6 timer i virkeligheden.
+
+Niveau 3: "Nice to Have" & Wildcards 🤷‍♂️
+
+7. Byggekvalitet
+
+En laptop, der ikke knirker og kan åbnes med én hånd, holder typisk længere.
+
+8. Grafikkort (GPU) 🎮 Wildcard
+
+Gamere/Videoredigering: Dette er kritisk (NVIDIA RTX-serien).
+
+Alle andre: Ligegyldigt. Integreret grafik er fint til streaming og office. Spar pengene.
+
+DEL 2: CPU Cheat Sheet & Rangliste 🧠
+
+Når du har styr på RAM og Skærm, skal du vælge motoren. Men en "i7" er ikke bare en "i7". Her er hierarkiet:
+
+🏆 Tier S: Workstation & Heavy Gaming (Overkill for 99%)
+
+Kun til pro-videoredigering, tung kodning eller hardcore gaming.
+
+Apple: M3 Max / M4 Max
+
+Intel: Core i9-14900HX / Core Ultra 9 (H-series)
+
+AMD: Ryzen 9 7945HX / Ryzen 9 AI 300-serien
+
+🥇 Tier A: High-End Performance (Den sikre vinder)
+
+Perfekt til tung multitasking, hobby-videoredigering og gaming.
+
+Apple: M3 Pro / M4 Pro / M4 (basis modellen er meget stærk)
+
+Intel: Core Ultra 7 (Series 2) / Core i7-13700H
+
+AMD: Ryzen 7 8845HS / Ryzen 7 7840HS / Ryzen AI 9
+
+🥈 Tier B: "Sweet Spot" (Bedst til prisen)
+
+Her anbefaler jeg de fleste at købe. Rigeligt hurtig til studie, office og streaming.
+
+Apple: M2 / M3 (MacBook Air modellerne)
+
+Intel: Core Ultra 5 / Core i5-13500H / Core i5-1240P
+
+AMD: Ryzen 5 7640HS / Ryzen 5 8645HS / Ryzen 7 (U-serien)
+
+🥉 Tier C: Budget / Basis Office
+
+Fint til Word, Excel og Netflix. Bliver presset ved mange åbne programmer.
+
+Intel: Core i3-1315U / Core 3 / Core i5 (U-serien fra 12. gen)
+
+AMD: Ryzen 5 (ældre U-serier f.eks. 7520U) / Ryzen 3
+
+💀 Tier D: Undgå dem! (Flaskehalsen)
+
+Din computer vil føles langsom fra dag 1.
+
+Intel: Celeron, Pentium, N-serien.
+
+AMD: Athlon, A-serien.
+
+🔍 Sådan læser du koden (Bogstavet til sidst)
+
+Tallet (i5 vs i7) er ligegyldigt uden bogstavet:
+
+H / HX / HS: Kraftig motor. Findes i tykkere laptops/gamer pc'er. Bruger mere strøm, yder mest.
+
+U: Økonomisk motor. Findes i tynde "Ultrabooks". Godt batteri, men langsommere ved tungt pres.
+
+Core Ultra / Ryzen AI: Nyere chips med dedikeret AI-del. Ofte mere effektive.

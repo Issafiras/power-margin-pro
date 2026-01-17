@@ -31,22 +31,85 @@ interface ExtractedSpecs {
   screenSize?: number;
 }
 
+// CPU Tier mapping based on buying guide (S=10, A=8, B=6, C=4, D=1)
+// Tier S: M3/M4 Max, i9-14900HX, Core Ultra 9, Ryzen 9 7945HX
+// Tier A: M3/M4 Pro, M4 base, Core Ultra 7, i7-13700H, Ryzen 7 8845HS
+// Tier B: M2/M3 base, Core Ultra 5, i5-13500H, Ryzen 5 7640HS (Sweet spot)
+// Tier C: i3, Ryzen 3, Core 3 (Budget)
+// Tier D: Celeron, Pentium, Athlon, A-series, N-series (Avoid!)
 function getCpuTier(cpuString: string): number {
   const cpu = cpuString.toLowerCase();
-  if (/intel\s+core\s+(?:ultra\s+)?i3/i.test(cpu)) return 3;
-  if (/intel\s+core\s+(?:ultra\s+)?i5/i.test(cpu)) return 5;
-  if (/intel\s+core\s+(?:ultra\s+)?i7/i.test(cpu)) return 7;
-  if (/intel\s+core\s+(?:ultra\s+)?i9/i.test(cpu)) return 9;
-  if (/amd\s+ryzen\s+3/i.test(cpu)) return 3;
-  if (/amd\s+ryzen\s+5/i.test(cpu)) return 5;
-  if (/amd\s+ryzen\s+7/i.test(cpu)) return 7;
-  if (/amd\s+ryzen\s+9/i.test(cpu)) return 9;
-  if (/apple\s+m4/i.test(cpu)) return 10;
-  if (/apple\s+m3/i.test(cpu)) return 9;
-  if (/apple\s+m2/i.test(cpu)) return 8;
-  if (/apple\s+m1/i.test(cpu)) return 7;
-  if (/celeron|pentium|athlon/i.test(cpu)) return 1;
-  return 0;
+  
+  // Tier D (Avoid!) - Score 1
+  // Includes: Celeron, Pentium, Athlon, AMD A-series, Intel N-series
+  if (/celeron|pentium|athlon|amd\s+a\d|intel\s+n\d{4}/i.test(cpu)) return 1;
+  
+  // Tier S (Workstation) - Score 10
+  // Apple M3/M4 Max/Ultra
+  if (/apple\s+m[34]\s*(max|ultra)/i.test(cpu)) return 10;
+  // Intel Core Ultra 9 (explicitly Ultra 9, not just "Core 9")
+  if (/core\s+ultra\s+9/i.test(cpu)) return 10;
+  // Intel i9 HX series (14th/15th gen high-performance)
+  if (/i9[- ]?(14|15)\d{3}hx/i.test(cpu)) return 10;
+  // AMD Ryzen 9 HX series (7945HX, 8945HX etc.)
+  if (/ryzen\s+9.*\d{4}hx/i.test(cpu)) return 10;
+  // Snapdragon X Elite
+  if (/snapdragon\s+x\s*elite/i.test(cpu)) return 10;
+  // Ryzen AI 300-series high-end
+  if (/ryzen\s+ai\s+9\s+3\d{2}/i.test(cpu)) return 10;
+  
+  // Tier A (High-End) - Score 8
+  // Apple M3/M4 Pro
+  if (/apple\s+m[34]\s*pro/i.test(cpu)) return 8;
+  // Apple M4 base (very strong)
+  if (/apple\s+m4(?!\s*max|\s*pro|\s*ultra)/i.test(cpu)) return 8;
+  // Intel Core Ultra 7 (Series 2)
+  if (/core\s+ultra\s+7/i.test(cpu)) return 8;
+  // Intel i7 H-series (13th/14th gen)
+  if (/i7[- ]?(13|14)\d{3}h/i.test(cpu)) return 8;
+  // AMD Ryzen 7 HS/H series
+  if (/ryzen\s+7.*\d{4}h[sx]?/i.test(cpu)) return 8;
+  // AMD Ryzen AI 9
+  if (/ryzen\s+ai\s+9/i.test(cpu)) return 8;
+  // Snapdragon X Plus
+  if (/snapdragon\s+x\s*plus/i.test(cpu)) return 7;
+  
+  // Tier B (Sweet Spot) - Score 6
+  // Apple M2/M3 base (MacBook Air)
+  if (/apple\s+m[23](?!\s*max|\s*pro|\s*ultra)/i.test(cpu)) return 6;
+  // Intel Core Ultra 5
+  if (/core\s+ultra\s+5/i.test(cpu)) return 6;
+  // Intel i5 H/P-series (12th/13th/14th gen)
+  if (/i5[- ]?(12|13|14)\d{3}[hp]/i.test(cpu)) return 6;
+  // AMD Ryzen 5 HS series (7640HS, 8645HS)
+  if (/ryzen\s+5.*\d{4}h[sx]?/i.test(cpu)) return 6;
+  // AMD Ryzen 7 U-series (efficient)
+  if (/ryzen\s+7.*u/i.test(cpu)) return 6;
+  // Apple M1 (still good)
+  if (/apple\s+m1(?!\s*max|\s*pro|\s*ultra)/i.test(cpu)) return 6;
+  
+  // Tier C (Budget) - Score 4
+  // Intel i3 (12th/13th/14th gen)
+  if (/i3[- ]?(12|13|14)\d{3}/i.test(cpu)) return 4;
+  // Intel Core 3
+  if (/core\s+3/i.test(cpu)) return 4;
+  // AMD Ryzen 3
+  if (/ryzen\s+3/i.test(cpu)) return 4;
+  // AMD Ryzen 5 U-series (older/slower)
+  if (/ryzen\s+5.*u/i.test(cpu)) return 4;
+  // Intel i5 U-series (ultrabook, slower)
+  if (/i5.*u/i.test(cpu)) return 4;
+  
+  // Fallback for older/unknown CPUs (generic patterns)
+  if (/i9/i.test(cpu)) return 8;
+  if (/i7/i.test(cpu)) return 6;
+  if (/i5/i.test(cpu)) return 5;
+  if (/i3/i.test(cpu)) return 4;
+  if (/ryzen\s+9/i.test(cpu)) return 8;
+  if (/ryzen\s+7/i.test(cpu)) return 6;
+  if (/ryzen\s+5/i.test(cpu)) return 5;
+  
+  return 0; // Unknown
 }
 
 function getGpuTier(gpuString: string): number {
@@ -165,6 +228,11 @@ function extractSpecs(productName: string): ExtractedSpecs {
   return specs;
 }
 
+// Scoring based on buying guide priority: RAM > CPU > Storage > GPU
+// RAM: Most important - no downgrade allowed, 16GB is standard, 32GB is bonus
+// CPU: Tier system (S/A/B/C/D), penalize D-tier heavily
+// Storage: 512GB minimum for good score
+// GPU: Only matters for gaming (RTX series)
 function calculateUpgradeScore(
   alternative: ExtractedSpecs,
   reference: ExtractedSpecs,
@@ -172,59 +240,143 @@ function calculateUpgradeScore(
   alternativePrice: number,
   referencePrice: number
 ): { score: number; isValidUpgrade: boolean; upgradeReason?: string } {
-  const cpuDiff = (alternative.cpuTier || 0) - (reference.cpuTier || 0);
-  const ramDiff = (alternative.ramGB || 0) - (reference.ramGB || 0);
-  const storageDiff = (alternative.storageGB || 0) - (reference.storageGB || 0);
-  const gpuDiff = (alternative.gpuTier || 0) - (reference.gpuTier || 0);
+  const altRam = alternative.ramGB || 0;
+  const refRam = reference.ramGB || 0;
+  const altCpu = alternative.cpuTier || 0;
+  const refCpu = reference.cpuTier || 0;
+  const altStorage = alternative.storageGB || 0;
+  const refStorage = reference.storageGB || 0;
+  const altGpu = alternative.gpuTier || 0;
+  const refGpu = reference.gpuTier || 0;
   
-  // Only count as major downgrade if we can actually compare the specs
-  const hasMajorDowngrade = 
-    (reference.cpuTier && alternative.cpuTier && cpuDiff < -2) ||
-    (reference.ramGB && alternative.ramGB && ramDiff < -8) ||
-    (reference.gpuTier && alternative.gpuTier && gpuDiff < -2);
+  const ramDiff = altRam - refRam;
+  const cpuDiff = altCpu - refCpu;
+  const storageDiff = altStorage - refStorage;
+  const gpuDiff = altGpu - refGpu;
   
-  // Calculate base score - only count positive differences
   let score = 0;
   const reasons: string[] = [];
+  const penalties: string[] = [];
   
-  if (cpuDiff > 0) {
-    score += cpuDiff * 10;
-    reasons.push("Bedre CPU");
+  // === RAM SCORING (Most Important) ===
+  // RAM bands: <8=bad, 8=minimum, 16=standard, 32=nice-to-have
+  if (altRam >= 32) {
+    score += 30; // Premium RAM
+    if (refRam < 32) reasons.push("32GB RAM");
+  } else if (altRam >= 16) {
+    score += 20; // Standard RAM
+    if (refRam < 16) reasons.push("16GB RAM (standard)");
+  } else if (altRam >= 8) {
+    score += 5; // Minimum acceptable
+  } else if (altRam > 0) {
+    score -= 20; // Below minimum
+    penalties.push("Under 8GB RAM");
   }
+  
+  // RAM upgrade bonus
   if (ramDiff > 0) {
-    score += ramDiff * 2;
-    reasons.push(`+${ramDiff}GB RAM`);
-  }
-  if (storageDiff > 0) {
-    score += storageDiff * 0.01;
-    reasons.push("Mere lagerplads");
-  }
-  if (gpuDiff > 0) {
-    score += gpuDiff * 5;
-    reasons.push("Bedre grafikkort");
+    score += ramDiff * 3; // Heavy weight for RAM upgrades
+    if (!reasons.some(r => r.includes("RAM"))) {
+      reasons.push(`+${ramDiff}GB RAM`);
+    }
   }
   
-  // High margin products get a significant boost
+  // === CPU SCORING (Second Priority) ===
+  // Bonus for good CPU tiers
+  if (altCpu >= 8) { // Tier A or S
+    score += 15;
+    if (refCpu < 8) reasons.push("Høj-ydeevne CPU (Tier A/S)");
+  } else if (altCpu >= 6) { // Tier B (sweet spot)
+    score += 10;
+    if (refCpu < 6) reasons.push("God CPU (Sweet Spot)");
+  } else if (altCpu <= 1 && altCpu > 0) { // Tier D (avoid!)
+    score -= 40; // Heavy penalty for D-tier CPUs
+    penalties.push("Undgå: Celeron/Pentium CPU");
+  }
+  
+  // CPU upgrade bonus
+  if (cpuDiff > 0) {
+    score += cpuDiff * 8;
+    if (!reasons.some(r => r.includes("CPU"))) {
+      reasons.push("Bedre CPU");
+    }
+  }
+  
+  // === STORAGE SCORING ===
+  // 512GB is minimum recommended
+  if (altStorage >= 1024) { // 1TB+
+    score += 10;
+    if (refStorage < 1024) reasons.push("1TB+ lagerplads");
+  } else if (altStorage >= 512) {
+    score += 5;
+    if (refStorage < 512) reasons.push("512GB+ SSD");
+  } else if (altStorage > 0 && altStorage < 256) {
+    score -= 5;
+    penalties.push("Lille lagerplads");
+  }
+  
+  // Storage upgrade bonus
+  if (storageDiff > 0) {
+    score += storageDiff * 0.02;
+  }
+  
+  // === GPU SCORING (Only for gaming/video) ===
+  // Only add GPU score if reference has dedicated GPU (gaming context)
+  if (refGpu >= 3 || altGpu >= 5) { // Gaming context
+    if (gpuDiff > 0) {
+      score += gpuDiff * 3;
+      reasons.push("Bedre grafikkort");
+    }
+  }
+  
+  // === HIGH MARGIN BONUS ===
   if (isHighMargin) {
     score += 25;
     reasons.push("Høj avance");
   }
   
-  // Price proximity bonus (prefer alternatives within 30% of reference)
+  // === PRICE PROXIMITY BONUS ===
   const priceRatio = alternativePrice / referencePrice;
-  if (priceRatio >= 0.8 && priceRatio <= 1.3) {
-    score += 10;
+  if (priceRatio >= 0.9 && priceRatio <= 1.2) {
+    score += 10; // Similar price range
+  } else if (priceRatio > 1.2 && priceRatio <= 1.4) {
+    score += 5; // Slightly higher but reasonable
   }
   
-  // Valid if: has any upgrade OR is high margin, AND no major downgrades, AND within 50% price
-  const hasAnyUpgrade = cpuDiff > 0 || ramDiff > 0 || storageDiff > 0 || gpuDiff > 0;
+  // === VALIDITY CHECKS ===
+  // Rule 1: No RAM downgrade allowed (RAM is most important)
+  const hasRamDowngrade = refRam > 0 && altRam > 0 && ramDiff < 0;
+  
+  // Rule 2: No D-tier CPU if reference is C+ tier
+  const hasDTierCpu = altCpu === 1;
+  const refIsDecentCpu = refCpu >= 4;
+  const hasBadCpuDowngrade = hasDTierCpu && refIsDecentCpu;
+  
+  // Rule 3: Major CPU downgrade (more than 2 tiers)
+  const hasMajorCpuDowngrade = refCpu > 0 && altCpu > 0 && cpuDiff < -2;
+  
+  // Rule 4: Price within reasonable range
   const isWithinPriceRange = alternativePrice <= referencePrice * 1.5;
-  const isValidUpgrade = (hasAnyUpgrade || isHighMargin) && !hasMajorDowngrade && isWithinPriceRange;
+  
+  // Valid upgrade requires: no RAM downgrade, no bad CPU, within price
+  const hasAnyUpgrade = ramDiff > 0 || cpuDiff > 0 || storageDiff > 0 || gpuDiff > 0;
+  const isValidUpgrade = 
+    (hasAnyUpgrade || isHighMargin) && 
+    !hasRamDowngrade && 
+    !hasBadCpuDowngrade && 
+    !hasMajorCpuDowngrade && 
+    isWithinPriceRange;
+  
+  // Combine reasons and penalties
+  const allReasons = [...reasons];
+  if (penalties.length > 0) {
+    allReasons.push(`Advarsel: ${penalties.join(", ")}`);
+  }
   
   return { 
     score, 
     isValidUpgrade, 
-    upgradeReason: reasons.length > 0 ? reasons.join(", ") : undefined 
+    upgradeReason: allReasons.length > 0 ? allReasons.join(", ") : undefined 
   };
 }
 
