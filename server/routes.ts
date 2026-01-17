@@ -432,6 +432,9 @@ function isHighMarginProduct(brand: string, price: number): { isHighMargin: bool
   if (priceStr.endsWith("98")) {
     return { isHighMargin: true, reason: "Pris ender på 98" };
   }
+  if (priceStr.endsWith("92")) {
+    return { isHighMargin: true, reason: "Pris ender på 92" };
+  }
   
   return { isHighMargin: false };
 }
