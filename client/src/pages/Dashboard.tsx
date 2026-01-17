@@ -5,10 +5,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { AlternativesTable } from "@/components/AlternativesTable";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Laptop, Zap, FileText, FileSpreadsheet, Loader2 } from "lucide-react";
+import { Zap, FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 import type { SearchResponse } from "@shared/schema";
 
 export default function Dashboard() {
@@ -128,64 +127,57 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-md bg-primary flex items-center justify-center">
-                <Zap className="h-6 w-6 text-primary-foreground" />
+      {/* Hero gradient overlay */}
+      <div className="hero-gradient fixed inset-0 pointer-events-none" />
+      
+      <header className="sticky top-0 z-[9999] glass-strong border-b border-white/5">
+        <div className="container mx-auto px-4 py-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20 animate-float">
+                <Zap className="h-7 w-7 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-xl font-bold tracking-tight">Power Margin Optimizer</h1>
-                <p className="text-xs text-muted-foreground">Find avancestærke produkter til Power.dk</p>
+                <h1 className="text-2xl font-bold tracking-tight">
+                  <span className="text-gradient">Power</span> Margin Optimizer
+                </h1>
+                <p className="text-sm text-muted-foreground/80">Find avancestærke produkter til Power.dk</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs">
-                <Laptop className="h-3 w-3 mr-1" />
-                Bærbar PC
-              </Badge>
-              <Badge variant="secondary" className="text-xs">
-                Kategori 1341
-              </Badge>
+            <div className="flex items-center gap-3">
+              {data && data.products.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleExportPdf}
+                    disabled={pdfLoading}
+                    data-testid="button-export-pdf"
+                  >
+                    {pdfLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileText className="h-4 w-4" />
+                    )}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleExportExcel}
+                    disabled={excelLoading}
+                    data-testid="button-export-excel"
+                  >
+                    {excelLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <FileSpreadsheet className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
           <SearchBar onSearch={handleSearch} isLoading={isLoading} />
-          
-          {data && data.products.length > 0 && (
-            <div className="flex items-center gap-2 mt-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportPdf}
-                disabled={pdfLoading}
-                className="border-primary/50 hover:bg-primary/10"
-                data-testid="button-export-pdf"
-              >
-                {pdfLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileText className="h-4 w-4 mr-2" />
-                )}
-                Eksportér til PDF
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportExcel}
-                disabled={excelLoading}
-                className="border-primary/50 hover:bg-primary/10"
-                data-testid="button-export-excel"
-              >
-                {excelLoading ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <FileSpreadsheet className="h-4 w-4 mr-2" />
-                )}
-                Eksportér til Excel
-              </Button>
-            </div>
-          )}
         </div>
       </header>
 
@@ -209,32 +201,33 @@ export default function Dashboard() {
         )}
         
         {hasSearched && !isLoading && !error && data && data.products.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">
-              <div className="sticky top-[200px]">
-                <div className="mb-3">
-                  <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                    Kundens Valgte Produkt
+              <div className="sticky top-[220px]">
+                <div className="mb-4">
+                  <h2 className="text-xs font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-8 h-px bg-gradient-to-r from-primary to-transparent" />
+                    Kundens Valg
                   </h2>
                 </div>
                 {mainProduct && (
                   <ProductCard product={mainProduct} variant="main" />
                 )}
                 
-                <div className="mt-4 p-4 rounded-md bg-card border">
-                  <h3 className="text-sm font-medium mb-2">Avance-regler</h3>
-                  <ul className="text-xs text-muted-foreground space-y-1.5">
-                    <li className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                      <span>Brand = "Cepter" = Høj avance</span>
+                <div className="mt-6 p-4 rounded-xl stat-card">
+                  <h3 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wide">Avance-logik</h3>
+                  <ul className="text-xs text-muted-foreground space-y-2.5">
+                    <li className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-primary shadow-lg shadow-primary/30" />
+                      <span>Cepter brand = Høj avance</span>
                     </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
+                    <li className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-primary shadow-lg shadow-primary/30" />
                       <span>Pris ender på "98" = Høj avance</span>
                     </li>
-                    <li className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-muted-foreground" />
-                      <span>Andre produkter = Lav avance</span>
+                    <li className="flex items-center gap-3">
+                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
+                      <span className="text-muted-foreground/70">Andre = Lav avance</span>
                     </li>
                   </ul>
                 </div>
@@ -242,10 +235,14 @@ export default function Dashboard() {
             </div>
 
             <div className="lg:col-span-2">
-              <div className="mb-3">
-                <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-                  Avancestærke Alternativer ({alternatives.length})
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <h2 className="text-xs font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
+                  <span className="w-8 h-px bg-gradient-to-r from-primary to-transparent" />
+                  Alternativer
                 </h2>
+                <span className="text-xs text-muted-foreground/60 px-2.5 py-1 rounded-full bg-muted/30">
+                  {alternatives.length} fundet
+                </span>
               </div>
               <AlternativesTable 
                 alternatives={alternatives} 
@@ -256,10 +253,10 @@ export default function Dashboard() {
         )}
       </main>
 
-      <footer className="border-t mt-auto">
-        <div className="container mx-auto px-4 py-4">
-          <p className="text-xs text-center text-muted-foreground">
-            Power Margin Optimizer Pro - Internt værktøj til Power.dk salgspersonale
+      <footer className="border-t border-white/5 mt-auto glass">
+        <div className="container mx-auto px-4 py-6">
+          <p className="text-xs text-center text-muted-foreground/50">
+            Power Margin Optimizer Pro — Internt værktøj til Power.dk
           </p>
         </div>
       </footer>

@@ -35,7 +35,7 @@ export function LoadingState() {
       <div className="lg:col-span-2">
         <Card className="h-full">
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-4">
               <Skeleton className="h-6 w-48" />
               <Skeleton className="h-5 w-24" />
             </div>

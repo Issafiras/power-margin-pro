@@ -30,46 +30,48 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
 
   return (
     <Card 
-      className={`relative overflow-visible transition-all duration-300 ${
+      className={`relative overflow-visible transition-all duration-500 card-modern ${
         product.isTopPick 
-          ? "top-pick-glow border-primary" 
+          ? "top-pick-glow border-primary/60 gradient-border" 
           : product.isHighMargin 
-            ? "high-margin-glow border-primary/50" 
+            ? "high-margin-glow border-primary/30" 
             : ""
       }`}
       data-testid={`card-product-${product.id}`}
     >
       {product.isTopPick && (
         <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-          <Badge className="bg-primary text-primary-foreground gap-1 px-3 py-1">
+          <Badge className="bg-gradient-to-r from-primary to-primary/80 text-primary-foreground gap-1.5 px-4 py-1.5 shadow-lg shadow-primary/30">
             <Trophy className="h-3.5 w-3.5" />
             Top Pick
           </Badge>
         </div>
       )}
       
-      <CardHeader className="flex flex-row items-start justify-between gap-2 pb-2">
+      <CardHeader className="flex flex-row items-start justify-between gap-3 pb-3">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
+          <div className="flex items-center gap-2 flex-wrap mb-2">
             <Badge 
               variant={product.isHighMargin ? "default" : "secondary"}
-              className={product.isHighMargin ? "bg-primary" : ""}
+              className={product.isHighMargin 
+                ? "bg-gradient-to-r from-primary to-primary/80 shadow-sm shadow-primary/20" 
+                : "bg-muted/50 text-muted-foreground"}
               data-testid={`badge-margin-${product.id}`}
             >
-              {product.isHighMargin ? "Høj Avance" : "Lav Avance"}
+              {product.isHighMargin ? "Høj Avance" : "Standard"}
             </Badge>
             {product.marginReason && product.isHighMargin && (
-              <span className="text-xs text-muted-foreground">({product.marginReason})</span>
+              <span className="text-[10px] text-primary/70 uppercase tracking-wide">{product.marginReason}</span>
             )}
           </div>
-          <h3 className="font-semibold text-sm leading-tight line-clamp-2" data-testid={`text-name-${product.id}`}>
+          <h3 className="font-semibold text-sm leading-snug line-clamp-2 text-foreground/95" data-testid={`text-name-${product.id}`}>
             {product.name}
           </h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{product.brand}</p>
+          <p className="text-xs text-muted-foreground/70 mt-1 font-medium">{product.brand}</p>
         </div>
         
         {product.imageUrl && (
-          <div className="w-16 h-16 flex-shrink-0 rounded-md overflow-hidden bg-muted/50">
+          <div className="w-20 h-20 flex-shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-muted/30 to-muted/10 p-2">
             <img 
               src={product.imageUrl} 
               alt={product.name}
@@ -95,7 +97,7 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
           </div>
           
           {variant === "alternative" && referencePrice && priceDiff !== 0 && (
-            <div className={`flex items-center gap-1 text-sm ${priceDiff > 0 ? "text-destructive" : "text-green-500"}`}>
+            <div className={`flex items-center gap-1 text-sm ${priceDiff > 0 ? "text-destructive" : "text-primary"}`}>
               {priceDiff > 0 ? (
                 <TrendingUp className="h-4 w-4" />
               ) : (
@@ -139,7 +141,6 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
           <Tooltip>
             <TooltipTrigger asChild>
               <Button 
-                size="sm" 
                 variant="outline" 
                 className="flex-1"
                 onClick={handleCopyLink}
