@@ -1,6 +1,6 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, Sparkles } from "lucide-react";
+import { Search, Loader2, Sparkles, Laptop } from "lucide-react";
 import { useState } from "react";
 
 interface SearchBarProps {
@@ -10,6 +10,7 @@ interface SearchBarProps {
 
 export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
   const [query, setQuery] = useState("");
+  const [isFocused, setIsFocused] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,16 +21,24 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
 
   return (
     <form onSubmit={handleSubmit} className="w-full">
-      <div className="search-glow rounded-xl p-1 bg-card/50 transition-all duration-300">
+      <div className={`search-glow rounded-2xl p-1.5 transition-all duration-500 ${
+        isFocused ? "scale-[1.01]" : ""
+      }`}>
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-primary/70" />
+            <div className="absolute left-4 top-1/2 -translate-y-1/2">
+              <Search className={`h-5 w-5 transition-colors duration-300 ${
+                isFocused ? "text-primary" : "text-primary/60"
+              }`} />
+            </div>
             <Input
               type="search"
               placeholder="Søg efter SKU eller modelnavn..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              className="pl-12 text-base bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/60"
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              className="pl-12 pr-4 h-12 text-base bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
               disabled={isLoading}
               data-testid="input-search"
             />
@@ -37,30 +46,32 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
           <Button 
             type="submit" 
             disabled={isLoading || !query.trim()}
-            className="font-medium"
+            size="lg"
+            className="h-12 px-6 font-medium gap-2 badge-premium border-0"
             data-testid="button-search"
           >
             {isLoading ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Søger...
               </>
             ) : (
               <>
-                <Sparkles className="h-4 w-4 mr-2" />
+                <Sparkles className="h-4 w-4" />
                 Find Alternativer
               </>
             )}
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-center gap-2 mt-3 text-xs text-muted-foreground/70">
-        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary/80">
-          <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse-subtle" />
-          Bærbar PC
-        </span>
-        <span className="text-muted-foreground/50">|</span>
-        <span>Optimeret til avance</span>
+      <div className="flex items-center justify-center gap-3 mt-4 text-xs">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+          <Laptop className="h-3.5 w-3.5 text-primary" />
+          <span className="text-primary font-medium">Bærbar PC</span>
+        </div>
+        <span className="text-muted-foreground/40">|</span>
+        <span className="text-muted-foreground/60">Optimeret til avance</span>
+        <span className="status-dot" />
       </div>
     </form>
   );
