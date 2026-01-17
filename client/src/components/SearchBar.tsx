@@ -64,14 +64,14 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-center gap-3 mt-4 text-xs">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">
+      <div className="flex items-center justify-center gap-3 mt-4 text-xs flex-wrap">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20" data-testid="chip-category">
           <Laptop className="h-3.5 w-3.5 text-primary" />
-          <span className="text-primary font-medium">Bærbar PC</span>
+          <span className="text-primary font-medium" data-testid="text-category-label">Bærbar PC</span>
         </div>
         <span className="text-muted-foreground/40">|</span>
-        <span className="text-muted-foreground/60">Optimeret til avance</span>
-        <span className="status-dot" />
+        <span className="text-muted-foreground/60" data-testid="text-optimization-label">Optimeret til avance</span>
+        <span className="status-dot" data-testid="indicator-status" />
       </div>
     </form>
   );

@@ -48,7 +48,7 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
         </div>
       )}
       
-      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-4 flex-wrap">
         <div className="flex-1 min-w-0 space-y-3">
           <div className="flex items-center gap-2 flex-wrap">
             {product.isHighMargin ? (
@@ -190,7 +190,6 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
                 size="icon" 
                 variant="ghost"
                 asChild
-                className="hover:bg-primary/10 hover:text-primary"
                 data-testid={`button-external-${product.id}`}
               >
                 <a href={product.productUrl} target="_blank" rel="noopener noreferrer">

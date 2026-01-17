@@ -33,7 +33,6 @@ function CopyButton({ url, productId }: { url: string; productId: string }) {
           size="icon" 
           variant="ghost" 
           onClick={handleCopy}
-          className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
           data-testid={`button-copy-alt-${productId}`}
         >
           {copied ? (
@@ -76,7 +75,7 @@ export function AlternativesTable({ alternatives, referencePrice }: Alternatives
   return (
     <Card className="glass-card h-full flex flex-col">
       <CardHeader className="flex-shrink-0 pb-4 border-b border-white/5">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
           <CardTitle className="text-lg flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary animate-glow" />
             Avancestærke Alternativer
@@ -136,7 +135,7 @@ export function AlternativesTable({ alternatives, referencePrice }: Alternatives
                     )}
                     
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start justify-between gap-4 flex-wrap">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                             {product.isHighMargin ? (
@@ -164,7 +163,6 @@ export function AlternativesTable({ alternatives, referencePrice }: Alternatives
                                 size="icon" 
                                 variant="ghost" 
                                 asChild
-                                className="h-8 w-8 hover:bg-primary/10 hover:text-primary"
                                 data-testid={`button-external-alt-${product.id}`}
                               >
                                 <a href={product.productUrl} target="_blank" rel="noopener noreferrer">

@@ -18,31 +18,31 @@ export function EmptyState({ type, message }: EmptyStateProps) {
           </div>
           <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-20 h-1 rounded-full bg-primary/20 blur-md" />
         </div>
-        <h2 className="text-3xl font-bold mb-4 text-foreground tracking-tight">
+        <h2 className="text-3xl font-bold mb-4 text-foreground tracking-tight" data-testid="text-empty-state-heading">
           Find <span className="text-gradient">avancestærke</span> produkter
         </h2>
         <p className="text-muted-foreground/80 max-w-md mb-10 text-lg">
           Søg efter et produkt for at se alternativer med bedre avance
         </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-left max-w-lg w-full">
-          <div className="flex items-start gap-4 p-6 rounded-2xl glass-card hover:border-primary/20 transition-all duration-300 group">
-            <div className="w-12 h-12 rounded-xl icon-container flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+          <div className="flex items-start gap-4 p-6 rounded-2xl glass-card transition-all duration-300 group" data-testid="card-instruction-search">
+            <div className="w-12 h-12 rounded-xl icon-container flex items-center justify-center flex-shrink-0">
               <Search className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold text-base mb-1.5">Søg produkt</h3>
-              <p className="text-sm text-muted-foreground/70 leading-relaxed">
+              <h3 className="font-semibold text-base mb-1.5" data-testid="text-instruction-search-title">Søg produkt</h3>
+              <p className="text-sm text-muted-foreground/70 leading-relaxed" data-testid="text-instruction-search-desc">
                 Indtast SKU eller modelnavn
               </p>
             </div>
           </div>
-          <div className="flex items-start gap-4 p-6 rounded-2xl glass-card hover:border-primary/20 transition-all duration-300 group" style={{ animationDelay: "100ms" }}>
-            <div className="w-12 h-12 rounded-xl icon-container flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+          <div className="flex items-start gap-4 p-6 rounded-2xl glass-card transition-all duration-300 group" style={{ animationDelay: "100ms" }} data-testid="card-instruction-alternatives">
+            <div className="w-12 h-12 rounded-xl icon-container flex items-center justify-center flex-shrink-0">
               <TrendingUp className="h-6 w-6 text-primary" />
             </div>
             <div>
-              <h3 className="font-semibold text-base mb-1.5">Se alternativer</h3>
-              <p className="text-sm text-muted-foreground/70 leading-relaxed">
+              <h3 className="font-semibold text-base mb-1.5" data-testid="text-instruction-alternatives-title">Se alternativer</h3>
+              <p className="text-sm text-muted-foreground/70 leading-relaxed" data-testid="text-instruction-alternatives-desc">
                 Sammenlign med høj-avance produkter
               </p>
             </div>
@@ -58,8 +58,8 @@ export function EmptyState({ type, message }: EmptyStateProps) {
         <div className="w-24 h-24 rounded-3xl glass-card flex items-center justify-center mb-8">
           <Search className="h-12 w-12 text-muted-foreground/40" />
         </div>
-        <h2 className="text-2xl font-semibold mb-3 text-foreground/90">Ingen produkter fundet</h2>
-        <p className="text-muted-foreground/70 max-w-md text-base">
+        <h2 className="text-2xl font-semibold mb-3 text-foreground/90" data-testid="text-no-results-heading">Ingen produkter fundet</h2>
+        <p className="text-muted-foreground/70 max-w-md text-base" data-testid="text-no-results-message">
           {message || "Prøv at søge med et andet søgeord eller SKU-nummer."}
         </p>
       </div>
@@ -71,8 +71,8 @@ export function EmptyState({ type, message }: EmptyStateProps) {
       <div className="w-24 h-24 rounded-3xl bg-destructive/10 border border-destructive/20 flex items-center justify-center mb-8">
         <AlertCircle className="h-12 w-12 text-destructive/70" />
       </div>
-      <h2 className="text-2xl font-semibold mb-3 text-foreground/90">Noget gik galt</h2>
-      <p className="text-muted-foreground/70 max-w-md text-base">
+      <h2 className="text-2xl font-semibold mb-3 text-foreground/90" data-testid="text-error-heading">Noget gik galt</h2>
+      <p className="text-muted-foreground/70 max-w-md text-base" data-testid="text-error-message">
         {message || "Der opstod en fejl under søgningen. Prøv igen senere."}
       </p>
     </div>
