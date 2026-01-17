@@ -162,7 +162,14 @@ function extractSpecs(productName: string): ExtractedSpecs {
     }
   }
   
-  const parenthesisMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])?[\/\s]*(\d{1,2})[\/\s]*(\d{2,4})\s*(?:GB|TB)/i);
+  // Try 3-value format first: (CPU/RAM/Storage) like "(i5/8/512 GB)"
+  const threeValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{1,2})\/(\d{2,4})\s*(?:GB|TB)/i);
+  // Try 2-value format: (CPU/Storage) like "(R7/512 GB)" - no RAM specified
+  const twoValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{2,4})\s*(?:GB|TB)/i);
+  
+  const parenthesisMatch = threeValueMatch || twoValueMatch;
+  const isThreeValue = !!threeValueMatch;
+  
   if (parenthesisMatch) {
     const cpuShorthand = parenthesisMatch[1]?.toUpperCase();
     if (cpuShorthand && !specs.cpu) {
@@ -191,15 +198,25 @@ function extractSpecs(productName: string): ExtractedSpecs {
       }
     }
     
-    const ramValue = parseInt(parenthesisMatch[2], 10);
-    if (ramValue >= 4 && ramValue <= 64) {
-      specs.ram = `${ramValue} GB`;
-      specs.ramGB = ramValue;
-    }
-    const storageValue = parseInt(parenthesisMatch[3], 10);
-    if (storageValue >= 64) {
-      specs.storage = `${storageValue} GB`;
-      specs.storageGB = storageValue;
+    if (isThreeValue) {
+      // 3-value format: group 2 is RAM, group 3 is storage
+      const ramValue = parseInt(parenthesisMatch[2], 10);
+      if (ramValue >= 4 && ramValue <= 64) {
+        specs.ram = `${ramValue} GB`;
+        specs.ramGB = ramValue;
+      }
+      const storageValue = parseInt(parenthesisMatch[3], 10);
+      if (storageValue >= 64) {
+        specs.storage = `${storageValue} GB`;
+        specs.storageGB = storageValue;
+      }
+    } else {
+      // 2-value format: group 2 is storage only (no RAM in name)
+      const storageValue = parseInt(parenthesisMatch[2], 10);
+      if (storageValue >= 64) {
+        specs.storage = `${storageValue} GB`;
+        specs.storageGB = storageValue;
+      }
     }
   }
   
