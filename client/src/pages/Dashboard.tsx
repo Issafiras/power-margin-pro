@@ -307,34 +307,108 @@ export default function Dashboard() {
                 </div>
                 
                 {showComparison && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/5 animate-slide-up">
-                    <div className="space-y-2">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Kundens Valg</p>
-                      <div className="p-3 rounded-lg bg-muted/20 border border-white/5">
-                        <p className="text-sm font-medium line-clamp-1">{mainProduct.name}</p>
-                        <p className="text-xl font-bold mt-1">{mainProduct.price.toLocaleString('da-DK')} kr</p>
-                        <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
-                          {mainProduct.specs?.cpu && <span>{mainProduct.specs.cpu}</span>}
-                          {mainProduct.specs?.ram && <span>• {mainProduct.specs.ram}</span>}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <p className="text-[10px] text-primary uppercase tracking-widest flex items-center gap-1.5">
+                  <div className="mt-4 pt-4 border-t border-white/5 animate-slide-up">
+                    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center mb-4">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest text-center">Kundens Valg</p>
+                      <div className="w-8" />
+                      <p className="text-[10px] text-primary uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
                         <Sparkles className="h-3 w-3" />
-                        Anbefalet Alternativ
+                        Anbefalet
                       </p>
-                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
-                        <p className="text-sm font-medium line-clamp-1">{topPick.name}</p>
-                        <p className="text-xl font-bold mt-1 text-primary">{topPick.price.toLocaleString('da-DK')} kr</p>
-                        <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
-                          {topPick.specs?.cpu && <span>{topPick.specs.cpu}</span>}
-                          {topPick.specs?.ram && <span>• {topPick.specs.ram}</span>}
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                        <div className="p-2 rounded-lg bg-muted/20 text-center">
+                          <p className="text-xs text-muted-foreground">Pris</p>
+                          <p className="text-lg font-bold">{mainProduct.price.toLocaleString('da-DK')} kr</p>
                         </div>
-                        {topPick.upgradeReason && (
-                          <Badge variant="outline" className="mt-2 text-[10px]">{topPick.upgradeReason}</Badge>
-                        )}
+                        <div className="flex items-center justify-center w-8">
+                          <ArrowRight className={`h-4 w-4 ${(topPick.priceDifference || 0) > 0 ? 'text-red-400' : 'text-green-400'}`} />
+                        </div>
+                        <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-center">
+                          <p className="text-xs text-muted-foreground">Pris</p>
+                          <p className="text-lg font-bold text-primary">{topPick.price.toLocaleString('da-DK')} kr</p>
+                          <p className={`text-[10px] font-semibold ${(topPick.priceDifference || 0) > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                            {(topPick.priceDifference || 0) > 0 ? '+' : ''}{topPick.priceDifference?.toLocaleString('da-DK')} kr
+                          </p>
+                        </div>
                       </div>
+
+                      {(mainProduct.specs?.ram || topPick.specs?.ram) && (
+                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.ramGB || 0) > (mainProduct.specs?.ramGB || 0) ? 'bg-muted/20' : 'bg-green-500/10 border border-green-500/20'}`}>
+                            <p className="text-xs text-muted-foreground">RAM</p>
+                            <p className="text-sm font-semibold">{mainProduct.specs?.ram || '—'}</p>
+                          </div>
+                          <div className="flex items-center justify-center w-8">
+                            {(topPick.specs?.ramGB || 0) > (mainProduct.specs?.ramGB || 0) ? (
+                              <TrendingUp className="h-4 w-4 text-green-400" />
+                            ) : (topPick.specs?.ramGB || 0) < (mainProduct.specs?.ramGB || 0) ? (
+                              <TrendingUp className="h-4 w-4 text-red-400 rotate-180" />
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">=</span>
+                            )}
+                          </div>
+                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.ramGB || 0) > (mainProduct.specs?.ramGB || 0) ? 'bg-green-500/10 border border-green-500/20' : 'bg-muted/20'}`}>
+                            <p className="text-xs text-muted-foreground">RAM</p>
+                            <p className="text-sm font-semibold">{topPick.specs?.ram || '—'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {(mainProduct.specs?.cpu || topPick.specs?.cpu) && (
+                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.cpuTier || 0) > (mainProduct.specs?.cpuTier || 0) ? 'bg-muted/20' : 'bg-green-500/10 border border-green-500/20'}`}>
+                            <p className="text-xs text-muted-foreground">CPU</p>
+                            <p className="text-xs font-medium line-clamp-1">{mainProduct.specs?.cpu || '—'}</p>
+                          </div>
+                          <div className="flex items-center justify-center w-8">
+                            {(topPick.specs?.cpuTier || 0) > (mainProduct.specs?.cpuTier || 0) ? (
+                              <TrendingUp className="h-4 w-4 text-green-400" />
+                            ) : (topPick.specs?.cpuTier || 0) < (mainProduct.specs?.cpuTier || 0) ? (
+                              <TrendingUp className="h-4 w-4 text-red-400 rotate-180" />
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">=</span>
+                            )}
+                          </div>
+                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.cpuTier || 0) > (mainProduct.specs?.cpuTier || 0) ? 'bg-green-500/10 border border-green-500/20' : 'bg-muted/20'}`}>
+                            <p className="text-xs text-muted-foreground">CPU</p>
+                            <p className="text-xs font-medium line-clamp-1">{topPick.specs?.cpu || '—'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {(mainProduct.specs?.storage || topPick.specs?.storage) && (
+                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.storageGB || 0) > (mainProduct.specs?.storageGB || 0) ? 'bg-muted/20' : 'bg-green-500/10 border border-green-500/20'}`}>
+                            <p className="text-xs text-muted-foreground">Lager</p>
+                            <p className="text-sm font-semibold">{mainProduct.specs?.storage || '—'}</p>
+                          </div>
+                          <div className="flex items-center justify-center w-8">
+                            {(topPick.specs?.storageGB || 0) > (mainProduct.specs?.storageGB || 0) ? (
+                              <TrendingUp className="h-4 w-4 text-green-400" />
+                            ) : (topPick.specs?.storageGB || 0) < (mainProduct.specs?.storageGB || 0) ? (
+                              <TrendingUp className="h-4 w-4 text-red-400 rotate-180" />
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">=</span>
+                            )}
+                          </div>
+                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.storageGB || 0) > (mainProduct.specs?.storageGB || 0) ? 'bg-green-500/10 border border-green-500/20' : 'bg-muted/20'}`}>
+                            <p className="text-xs text-muted-foreground">Lager</p>
+                            <p className="text-sm font-semibold">{topPick.specs?.storage || '—'}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {topPick.upgradeReason && (
+                        <div className="pt-2 text-center">
+                          <Badge className="badge-premium text-xs gap-1.5">
+                            <Sparkles className="h-3 w-3" />
+                            {topPick.upgradeReason}
+                          </Badge>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
