@@ -265,7 +265,8 @@ function calculateUpgradeScore(
   reference: ExtractedSpecs,
   isHighMargin: boolean,
   alternativePrice: number,
-  referencePrice: number
+  referencePrice: number,
+  maxPrice?: number
 ): { score: number; isValidUpgrade: boolean; upgradeReason?: string } {
   const altRam = alternative.ramGB || 0;
   const refRam = reference.ramGB || 0;
@@ -387,11 +388,12 @@ function calculateUpgradeScore(
   // Rule 3: Major CPU downgrade (more than 2 tiers) - only if both have CPU
   const hasMajorCpuDowngrade = refCpu > 0 && altCpu > 0 && cpuDiff < -2;
   
-  // Rule 4: Price within reasonable range
-  const isWithinPriceRange = alternativePrice <= referencePrice * 1.5;
+  // Rule 4: Price within reasonable range (use provided maxPrice or default to 1.5x)
+  const effectiveMaxPrice = maxPrice ?? referencePrice * 1.5;
+  const isWithinPriceRange = alternativePrice <= effectiveMaxPrice;
   
   // Determine if this is a valid upgrade
-  // If reference has no specs, allow high-margin products as valid alternatives
+  // If reference has no specs, show any product with RAM+Storage as potential alternatives
   const hasAnyUpgrade = ramDiff > 0 || cpuDiff > 0 || storageDiff > 0 || gpuDiff > 0;
   const refHasNoSpecs = refRam === 0 && refCpu === 0 && refStorage === 0;
   
@@ -400,7 +402,7 @@ function calculateUpgradeScore(
     isWithinPriceRange &&
     !hasBadCpuDowngrade &&
     (
-      refHasNoSpecs ? isHighMargin :  // Fallback: show high-margin when ref has no specs
+      refHasNoSpecs ? true :  // Fallback: show any alt with RAM+Storage when ref has no specs
       (
         (hasAnyUpgrade || isHighMargin) && 
         !hasRamDowngrade && 
@@ -757,7 +759,8 @@ export async function registerRoutes(
         const dbAlternatives = await storage.getAllProducts();
         const referencePrice = reference.price;
         const referenceSpecs = reference.specs;
-        const maxPrice = referencePrice * 1.5;
+        // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
+        const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
         
         // Filter to products with RAM+Storage specs (CPU optional) and within price range
         const validDbProducts = dbAlternatives.filter((p) => {
@@ -782,7 +785,8 @@ export async function registerRoutes(
             referenceSpecs,
             p.isHighMargin ?? false,
             p.price,
-            referencePrice
+            referencePrice,
+            maxPrice
           );
           
           return {
