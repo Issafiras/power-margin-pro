@@ -697,6 +697,29 @@ export async function registerRoutes(
     }
   });
   
+  // Autocomplete suggestions endpoint
+  app.get("/api/suggestions", async (req, res) => {
+    try {
+      const query = req.query.q as string;
+      if (!query || query.length < 2) {
+        return res.json({ suggestions: [] });
+      }
+
+      const products = await storage.searchProducts(query);
+      const suggestions = products.slice(0, 8).map(p => ({
+        id: p.id,
+        name: p.name,
+        brand: p.brand,
+        price: p.price,
+        isHighMargin: p.isHighMargin,
+      }));
+
+      res.json({ suggestions });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Database status endpoint
   app.get("/api/db/status", async (req, res) => {
     try {
