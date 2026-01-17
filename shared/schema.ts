@@ -1,4 +1,6 @@
 import { z } from "zod";
+import { pgTable, text, boolean, real, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
 
 export const productSchema = z.object({
   id: z.string(),
@@ -47,6 +49,27 @@ export const searchResponseSchema = z.object({
 });
 
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
+
+// Drizzle schema for PostgreSQL products table
+export const products = pgTable("products", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  brand: text("brand").notNull(),
+  price: real("price").notNull(),
+  originalPrice: real("original_price"),
+  imageUrl: text("image_url"),
+  productUrl: text("product_url").notNull(),
+  sku: text("sku"),
+  inStock: boolean("in_stock").default(true),
+  isHighMargin: boolean("is_high_margin").default(false),
+  marginReason: text("margin_reason"),
+  specs: jsonb("specs").$type<ProductSpecs>(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({ updatedAt: true });
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+export type DbProduct = typeof products.$inferSelect;
 
 export const users = {} as any;
 export const insertUserSchema = z.object({
