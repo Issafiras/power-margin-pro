@@ -121,14 +121,46 @@ function getGpuTier(gpuString: string): number {
   return 0;
 }
 
-function extractSpecs(productName: string): ExtractedSpecs {
+function extractSpecs(productName: string, salesArguments?: string): ExtractedSpecs {
   const specs: ExtractedSpecs = {};
   
+  // Combine product name and salesArguments for searching
+  const searchText = salesArguments 
+    ? `${productName}\n${salesArguments}` 
+    : productName;
+  
+  // Extract RAM from salesArguments first (most reliable source)
+  // Pattern: "16 GB RAM" or "8GB RAM" or "16 GB DDR4" etc.
+  const ramFromSales = searchText.match(/(\d{1,2})\s*GB\s*(?:RAM|DDR[45]|LPDDR[45x])/i);
+  if (ramFromSales) {
+    const ramValue = parseInt(ramFromSales[1], 10);
+    if (ramValue >= 4 && ramValue <= 128) {
+      specs.ram = `${ramValue} GB`;
+      specs.ramGB = ramValue;
+    }
+  }
+  
+  // Extract Storage from salesArguments
+  // Pattern: "512 GB SSD" or "1 TB SSD" or "512 GB M.2 SSD"
+  const storageFromSales = searchText.match(/(\d+)\s*(?:GB|TB)\s*(?:M\.2\s*)?(?:SSD|NVMe|HDD)/i);
+  if (storageFromSales) {
+    const value = parseInt(storageFromSales[1], 10);
+    const isTB = /TB/i.test(storageFromSales[0]);
+    if (isTB) {
+      specs.storage = `${value} TB`;
+      specs.storageGB = value * 1024;
+    } else if (value >= 64) {
+      specs.storage = `${value} GB`;
+      specs.storageGB = value;
+    }
+  }
+  
+  // Extract CPU - check salesArguments first for full model names
   const cpuPatterns = [
-    /Intel\s+Core\s+(?:Ultra\s+)?[i579][\s-]?(?:\d{4,5}[A-Z]*)/i,
-    /Intel\s+Core\s+(?:Ultra\s+)?[i579]/i,
-    /AMD\s+Ryzen\s+[3579]\s+\d{4}[A-Z]*/i,
-    /AMD\s+Ryzen\s+[3579]/i,
+    /AMD\s+Ryzen[™]?\s+[3579]\s+\d{4}[A-Z]*/i,
+    /Intel\s+Core[™]?\s+(?:Ultra\s+)?[i579][\s-]?(?:\d{4,5}[A-Z]*)/i,
+    /Intel\s+Core[™]?\s+(?:Ultra\s+)?[i579]/i,
+    /AMD\s+Ryzen[™]?\s+[3579]/i,
     /Apple\s+M[1234]\s*(?:Pro|Max|Ultra)?/i,
     /Snapdragon\s+X\s*(?:Elite|Plus)?/i,
     /Intel\s+(?:Celeron|Pentium|N\d{4})/i,
@@ -136,86 +168,86 @@ function extractSpecs(productName: string): ExtractedSpecs {
   ];
   
   for (const pattern of cpuPatterns) {
-    const match = productName.match(pattern);
+    const match = searchText.match(pattern);
     if (match) {
-      specs.cpu = match[0].trim();
+      specs.cpu = match[0].trim().replace(/[™]/g, '');
       specs.cpuTier = getCpuTier(specs.cpu);
       break;
     }
   }
   
+  // Extract GPU
   const gpuPatterns = [
     /RTX\s*\d{4}(?:\s*Ti)?(?:\s*Super)?/i,
     /GTX\s*\d{4}(?:\s*Ti)?/i,
     /GeForce\s+(?:RTX|GTX)\s*\d{4}(?:\s*Ti)?(?:\s*Super)?/i,
     /Radeon\s+RX\s*\d{4}[A-Z]*/i,
     /Intel\s+(?:Iris\s+Xe|Arc\s+A\d+|UHD\s+Graphics)/i,
-    /AMD\s+Radeon\s+Graphics/i,
+    /AMD\s+Radeon[™]?\s+Graphics/i,
   ];
   
   for (const pattern of gpuPatterns) {
-    const match = productName.match(pattern);
+    const match = searchText.match(pattern);
     if (match) {
-      specs.gpu = match[0].trim();
+      specs.gpu = match[0].trim().replace(/[™]/g, '');
       specs.gpuTier = getGpuTier(specs.gpu);
       break;
     }
   }
   
-  // Try 3-value format first: (CPU/RAM/Storage) like "(i5/8/512 GB)"
-  const threeValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{1,2})\/(\d{2,4})\s*(?:GB|TB)/i);
-  // Try 2-value format: (CPU/Storage) like "(R7/512 GB)" - no RAM specified
-  const twoValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{2,4})\s*(?:GB|TB)/i);
-  
-  const parenthesisMatch = threeValueMatch || twoValueMatch;
-  const isThreeValue = !!threeValueMatch;
-  
-  if (parenthesisMatch) {
-    const cpuShorthand = parenthesisMatch[1]?.toUpperCase();
-    if (cpuShorthand && !specs.cpu) {
-      let cpuName = "";
-      let tier = 0;
-      if (cpuShorthand.startsWith("I")) {
-        const num = cpuShorthand.charAt(1);
-        cpuName = `Intel Core i${num}`;
-        tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
-      } else if (cpuShorthand.startsWith("R")) {
-        const num = cpuShorthand.charAt(1);
-        cpuName = `AMD Ryzen ${num}`;
-        tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
-      } else if (cpuShorthand.startsWith("U")) {
-        const num = cpuShorthand.charAt(1);
-        cpuName = `Intel Core Ultra ${num}`;
-        tier = num === "9" ? 9 : num === "7" ? 7 : num === "5" ? 5 : 4;
-      } else if (cpuShorthand.startsWith("M")) {
-        const num = cpuShorthand.charAt(1);
-        cpuName = `Apple M${num}`;
-        tier = num === "4" ? 10 : num === "3" ? 9 : num === "2" ? 8 : 7;
-      }
-      if (cpuName) {
-        specs.cpu = cpuName;
-        specs.cpuTier = tier;
-      }
-    }
+  // Fallback: Try parenthesis format from product name if specs not found
+  if (!specs.cpu || !specs.ramGB || !specs.storageGB) {
+    // Try 3-value format: (CPU/RAM/Storage) like "(i5/8/512 GB)"
+    const threeValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{1,2})\/(\d{2,4})\s*(?:GB|TB)/i);
+    // Try 2-value format: (CPU/Storage) like "(R7/512 GB)"
+    const twoValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{2,4})\s*(?:GB|TB)/i);
     
-    if (isThreeValue) {
-      // 3-value format: group 2 is RAM, group 3 is storage
-      const ramValue = parseInt(parenthesisMatch[2], 10);
-      if (ramValue >= 4 && ramValue <= 64) {
-        specs.ram = `${ramValue} GB`;
-        specs.ramGB = ramValue;
+    const parenthesisMatch = threeValueMatch || twoValueMatch;
+    const isThreeValue = !!threeValueMatch;
+    
+    if (parenthesisMatch) {
+      const cpuShorthand = parenthesisMatch[1]?.toUpperCase();
+      if (cpuShorthand && !specs.cpu) {
+        let cpuName = "";
+        let tier = 0;
+        if (cpuShorthand.startsWith("I")) {
+          const num = cpuShorthand.charAt(1);
+          cpuName = `Intel Core i${num}`;
+          tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
+        } else if (cpuShorthand.startsWith("R")) {
+          const num = cpuShorthand.charAt(1);
+          cpuName = `AMD Ryzen ${num}`;
+          tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
+        } else if (cpuShorthand.startsWith("U")) {
+          const num = cpuShorthand.charAt(1);
+          cpuName = `Intel Core Ultra ${num}`;
+          tier = num === "9" ? 9 : num === "7" ? 7 : num === "5" ? 5 : 4;
+        } else if (cpuShorthand.startsWith("M")) {
+          const num = cpuShorthand.charAt(1);
+          cpuName = `Apple M${num}`;
+          tier = num === "4" ? 10 : num === "3" ? 9 : num === "2" ? 8 : 7;
+        }
+        if (cpuName) {
+          specs.cpu = cpuName;
+          specs.cpuTier = tier;
+        }
       }
-      const storageValue = parseInt(parenthesisMatch[3], 10);
-      if (storageValue >= 64) {
-        specs.storage = `${storageValue} GB`;
-        specs.storageGB = storageValue;
+      
+      if (isThreeValue && !specs.ramGB) {
+        const ramValue = parseInt(parenthesisMatch[2], 10);
+        if (ramValue >= 4 && ramValue <= 64) {
+          specs.ram = `${ramValue} GB`;
+          specs.ramGB = ramValue;
+        }
       }
-    } else {
-      // 2-value format: group 2 is storage only (no RAM in name)
-      const storageValue = parseInt(parenthesisMatch[2], 10);
-      if (storageValue >= 64) {
-        specs.storage = `${storageValue} GB`;
-        specs.storageGB = storageValue;
+      
+      if (!specs.storageGB) {
+        const storageIdx = isThreeValue ? 3 : 2;
+        const storageValue = parseInt(parenthesisMatch[storageIdx], 10);
+        if (storageValue >= 64) {
+          specs.storage = `${storageValue} GB`;
+          specs.storageGB = storageValue;
+        }
       }
     }
   }
@@ -545,7 +577,8 @@ export async function registerRoutes(
           }
           
           const marginInfo = isHighMarginProduct(brand, price);
-          const specs = extractSpecs(name);
+          const salesArguments = item.salesArguments || "";
+          const specs = extractSpecs(name, salesArguments);
           
           return {
             id: productId,
@@ -770,10 +803,11 @@ export async function registerRoutes(
       const mainPrice = mainProduct.price || 0;
       const mainMarginInfo = isHighMarginProduct(mainBrand, mainPrice);
       
-      // Try to get specs from database first, fallback to extraction
+      // Try to get specs from database first, fallback to extraction using salesArguments
       const mainProductId = mainProduct.productId?.toString() || "product-0";
       const dbProduct = await storage.getProductById(mainProductId);
-      const mainSpecs = (dbProduct?.specs as ExtractedSpecs) || extractSpecs(mainName);
+      const mainSalesArgs = mainProduct.salesArguments || "";
+      const mainSpecs = (dbProduct?.specs as ExtractedSpecs) || extractSpecs(mainName, mainSalesArgs);
       console.log(`Main product ${mainProductId} specs from ${dbProduct ? 'database' : 'extraction'}:`, mainSpecs);
       
       let mainProductUrl = mainProduct.url || "";
@@ -891,7 +925,8 @@ export async function registerRoutes(
               const brand = item.manufacturerName || "Ukendt";
               const price = item.price || 0;
               const marginInfo = isHighMarginProduct(brand, price);
-              const specs = extractSpecs(name);
+              const salesArgs = item.salesArguments || "";
+              const specs = extractSpecs(name, salesArgs);
               let productUrl = item.url || "";
               if (productUrl && !productUrl.startsWith("http")) {
                 productUrl = `https://www.power.dk${productUrl}`;
