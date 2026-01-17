@@ -138,25 +138,52 @@ export async function registerRoutes(
         });
       }
 
+      const headers = {
+        "User-Agent": getRandomUserAgent(),
+        "Accept": "application/json",
+        "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
+        "Referer": "https://www.power.dk/",
+        "Origin": "https://www.power.dk",
+      };
+
       const searchUrl = `${POWER_API_BASE}?q=${encodeURIComponent(query)}&cat=${LAPTOP_CATEGORY_ID}&size=15&from=0`;
       
       console.log("Fetching from Power.dk:", searchUrl);
       
       const response = await axios.get(searchUrl, {
-        headers: {
-          "User-Agent": getRandomUserAgent(),
-          "Accept": "application/json",
-          "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
-          "Referer": "https://www.power.dk/",
-          "Origin": "https://www.power.dk",
-        },
+        headers,
         timeout: 15000,
       });
 
       const data = response.data;
       
-      const rawProducts = data?.products || [];
+      let rawProducts = data?.products || [];
       const totalCount = data?.totalProductCount || rawProducts.length;
+
+      // If we found only 1 product (SKU search), fetch more laptops as alternatives
+      if (rawProducts.length === 1) {
+        console.log("Only 1 product found, fetching alternatives from category...");
+        const categoryUrl = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=20&from=0`;
+        
+        try {
+          const altResponse = await axios.get(categoryUrl, {
+            headers,
+            timeout: 15000,
+          });
+          
+          const altProducts = altResponse.data?.products || [];
+          // Add alternatives (excluding the searched product)
+          const searchedProductId = rawProducts[0].productId?.toString();
+          const alternatives = altProducts.filter((p: any) => 
+            p.productId?.toString() !== searchedProductId
+          ).slice(0, 10);
+          
+          rawProducts = [...rawProducts, ...alternatives];
+          console.log(`Added ${alternatives.length} alternatives from category`);
+        } catch (altError) {
+          console.log("Could not fetch alternatives:", altError);
+        }
+      }
 
       const products = rawProducts.map((item: any, index: number) => {
         const name = item.title || "Ukendt produkt";
