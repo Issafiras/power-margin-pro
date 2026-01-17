@@ -11,6 +11,7 @@ export interface IStorage {
   searchProducts(query: string): Promise<DbProduct[]>;
   getAllProducts(): Promise<DbProduct[]>;
   getProductCount(): Promise<number>;
+  getHighMarginCount(): Promise<number>;
   getProductById(id: string): Promise<DbProduct | undefined>;
 }
 
@@ -51,6 +52,10 @@ export class MemStorage implements IStorage {
   }
 
   async getProductCount(): Promise<number> {
+    throw new Error("MemStorage does not support products. Use DatabaseStorage.");
+  }
+
+  async getHighMarginCount(): Promise<number> {
     throw new Error("MemStorage does not support products. Use DatabaseStorage.");
   }
 
@@ -140,6 +145,11 @@ export class DatabaseStorage implements IStorage {
 
   async getProductCount(): Promise<number> {
     const result = await db.select({ count: sql<number>`count(*)` }).from(products);
+    return Number(result[0]?.count ?? 0);
+  }
+
+  async getHighMarginCount(): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` }).from(products).where(eq(products.isHighMargin, true));
     return Number(result[0]?.count ?? 0);
   }
 

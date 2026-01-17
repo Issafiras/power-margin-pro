@@ -218,26 +218,26 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-5">
-            <div className="stat-card rounded-xl p-3 flex items-center gap-3">
+          <div className="grid grid-cols-3 gap-3 mb-5 animate-stagger">
+            <div className="stat-card rounded-xl p-3 flex items-center gap-3 premium-card">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Package className="h-4 w-4 text-primary" />
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Produkter</p>
-                <p className="text-lg font-bold text-foreground">{dbStatus?.productCount || 0}</p>
+                <p className="text-lg font-bold text-foreground counter-value">{dbStatus?.productCount || 0}</p>
               </div>
             </div>
-            <div className="stat-card rounded-xl p-3 flex items-center gap-3">
+            <div className="stat-card rounded-xl p-3 flex items-center gap-3 premium-card">
               <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
                 <Sparkles className="h-4 w-4 text-primary" />
               </div>
               <div>
                 <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Høj Avance</p>
-                <p className="text-lg font-bold text-primary">{dbStatus?.highMarginCount || "—"}</p>
+                <p className="text-lg font-bold text-primary counter-value">{dbStatus?.highMarginCount || "—"}</p>
               </div>
             </div>
-            <div className="stat-card rounded-xl p-3 flex items-center gap-3">
+            <div className="stat-card rounded-xl p-3 flex items-center gap-3 premium-card">
               <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center">
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               </div>

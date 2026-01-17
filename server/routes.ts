@@ -701,8 +701,10 @@ export async function registerRoutes(
   app.get("/api/db/status", async (req, res) => {
     try {
       const count = await storage.getProductCount();
+      const highMarginCount = await storage.getHighMarginCount();
       res.json({
         productCount: count,
+        highMarginCount: highMarginCount,
         hasProducts: count > 0,
       });
     } catch (error: any) {
