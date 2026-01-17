@@ -344,6 +344,12 @@ function calculateUpgradeScore(
   }
   
   // === VALIDITY CHECKS ===
+  // Rule 0: Require complete specs for comparison (CPU, RAM, Storage)
+  // Both reference AND alternative must have all core specs
+  const refHasCompleteSpecs = refCpu > 0 && refRam > 0 && refStorage > 0;
+  const altHasCompleteSpecs = altCpu > 0 && altRam > 0 && altStorage > 0;
+  const hasCompleteSpecs = refHasCompleteSpecs && altHasCompleteSpecs;
+  
   // Rule 1: No RAM downgrade allowed (RAM is most important)
   const hasRamDowngrade = refRam > 0 && altRam > 0 && ramDiff < 0;
   
@@ -358,9 +364,10 @@ function calculateUpgradeScore(
   // Rule 4: Price within reasonable range
   const isWithinPriceRange = alternativePrice <= referencePrice * 1.5;
   
-  // Valid upgrade requires: no RAM downgrade, no bad CPU, within price
+  // Valid upgrade requires: complete specs, no RAM downgrade, no bad CPU, within price
   const hasAnyUpgrade = ramDiff > 0 || cpuDiff > 0 || storageDiff > 0 || gpuDiff > 0;
   const isValidUpgrade = 
+    hasCompleteSpecs &&  // Must have complete specs for comparison
     (hasAnyUpgrade || isHighMargin) && 
     !hasRamDowngrade && 
     !hasBadCpuDowngrade && 
