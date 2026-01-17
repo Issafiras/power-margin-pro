@@ -11,6 +11,7 @@ export interface IStorage {
   searchProducts(query: string): Promise<DbProduct[]>;
   getAllProducts(): Promise<DbProduct[]>;
   getProductCount(): Promise<number>;
+  getProductById(id: string): Promise<DbProduct | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -50,6 +51,10 @@ export class MemStorage implements IStorage {
   }
 
   async getProductCount(): Promise<number> {
+    throw new Error("MemStorage does not support products. Use DatabaseStorage.");
+  }
+
+  async getProductById(_id: string): Promise<DbProduct | undefined> {
     throw new Error("MemStorage does not support products. Use DatabaseStorage.");
   }
 }
@@ -130,6 +135,11 @@ export class DatabaseStorage implements IStorage {
   async getProductCount(): Promise<number> {
     const result = await db.select({ count: sql<number>`count(*)` }).from(products);
     return Number(result[0]?.count ?? 0);
+  }
+
+  async getProductById(id: string): Promise<DbProduct | undefined> {
+    const result = await db.select().from(products).where(eq(products.id, id));
+    return result[0];
   }
 }
 

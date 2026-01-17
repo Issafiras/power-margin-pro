@@ -162,14 +162,41 @@ function extractSpecs(productName: string): ExtractedSpecs {
     }
   }
   
-  const parenthesisMatch = productName.match(/\((?:i[3579]|R[3579]|M[1234])?[\/\s]*(\d{1,2})[\/\s]*(\d{2,4})\s*(?:GB|TB)/i);
+  const parenthesisMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])?[\/\s]*(\d{1,2})[\/\s]*(\d{2,4})\s*(?:GB|TB)/i);
   if (parenthesisMatch) {
-    const ramValue = parseInt(parenthesisMatch[1], 10);
+    const cpuShorthand = parenthesisMatch[1]?.toUpperCase();
+    if (cpuShorthand && !specs.cpu) {
+      let cpuName = "";
+      let tier = 0;
+      if (cpuShorthand.startsWith("I")) {
+        const num = cpuShorthand.charAt(1);
+        cpuName = `Intel Core i${num}`;
+        tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
+      } else if (cpuShorthand.startsWith("R")) {
+        const num = cpuShorthand.charAt(1);
+        cpuName = `AMD Ryzen ${num}`;
+        tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
+      } else if (cpuShorthand.startsWith("U")) {
+        const num = cpuShorthand.charAt(1);
+        cpuName = `Intel Core Ultra ${num}`;
+        tier = num === "9" ? 9 : num === "7" ? 7 : num === "5" ? 5 : 4;
+      } else if (cpuShorthand.startsWith("M")) {
+        const num = cpuShorthand.charAt(1);
+        cpuName = `Apple M${num}`;
+        tier = num === "4" ? 10 : num === "3" ? 9 : num === "2" ? 8 : 7;
+      }
+      if (cpuName) {
+        specs.cpu = cpuName;
+        specs.cpuTier = tier;
+      }
+    }
+    
+    const ramValue = parseInt(parenthesisMatch[2], 10);
     if (ramValue >= 4 && ramValue <= 64) {
       specs.ram = `${ramValue} GB`;
       specs.ramGB = ramValue;
     }
-    const storageValue = parseInt(parenthesisMatch[2], 10);
+    const storageValue = parseInt(parenthesisMatch[3], 10);
     if (storageValue >= 64) {
       specs.storage = `${storageValue} GB`;
       specs.storageGB = storageValue;
@@ -344,13 +371,12 @@ function calculateUpgradeScore(
   }
   
   // === VALIDITY CHECKS ===
-  // Rule 0: Require complete specs for comparison (CPU, RAM, Storage)
-  // Both reference AND alternative must have all core specs
-  const refHasCompleteSpecs = refCpu > 0 && refRam > 0 && refStorage > 0;
-  const altHasCompleteSpecs = altCpu > 0 && altRam > 0 && altStorage > 0;
-  const hasCompleteSpecs = refHasCompleteSpecs && altHasCompleteSpecs;
+  // Rule 0: Require RAM+Storage for alternatives (CPU optional for broader matches)
+  // Alternative must have RAM and Storage; reference specs are optional
+  const altHasBasicSpecs = altRam > 0 && altStorage > 0;
+  const refHasBasicSpecs = refRam > 0 && refStorage > 0;
   
-  // Rule 1: No RAM downgrade allowed (RAM is most important)
+  // Rule 1: No RAM downgrade allowed (RAM is most important) - only if ref has RAM
   const hasRamDowngrade = refRam > 0 && altRam > 0 && ramDiff < 0;
   
   // Rule 2: No D-tier CPU if reference is C+ tier
@@ -358,21 +384,29 @@ function calculateUpgradeScore(
   const refIsDecentCpu = refCpu >= 4;
   const hasBadCpuDowngrade = hasDTierCpu && refIsDecentCpu;
   
-  // Rule 3: Major CPU downgrade (more than 2 tiers)
+  // Rule 3: Major CPU downgrade (more than 2 tiers) - only if both have CPU
   const hasMajorCpuDowngrade = refCpu > 0 && altCpu > 0 && cpuDiff < -2;
   
   // Rule 4: Price within reasonable range
   const isWithinPriceRange = alternativePrice <= referencePrice * 1.5;
   
-  // Valid upgrade requires: complete specs, no RAM downgrade, no bad CPU, within price
+  // Determine if this is a valid upgrade
+  // If reference has no specs, allow high-margin products as valid alternatives
   const hasAnyUpgrade = ramDiff > 0 || cpuDiff > 0 || storageDiff > 0 || gpuDiff > 0;
+  const refHasNoSpecs = refRam === 0 && refCpu === 0 && refStorage === 0;
+  
   const isValidUpgrade = 
-    hasCompleteSpecs &&  // Must have complete specs for comparison
-    (hasAnyUpgrade || isHighMargin) && 
-    !hasRamDowngrade && 
-    !hasBadCpuDowngrade && 
-    !hasMajorCpuDowngrade && 
-    isWithinPriceRange;
+    altHasBasicSpecs &&  // Alternative must have at least RAM+Storage
+    isWithinPriceRange &&
+    !hasBadCpuDowngrade &&
+    (
+      refHasNoSpecs ? isHighMargin :  // Fallback: show high-margin when ref has no specs
+      (
+        (hasAnyUpgrade || isHighMargin) && 
+        !hasRamDowngrade && 
+        !hasMajorCpuDowngrade
+      )
+    );
   
   // Combine reasons and penalties
   const allReasons = [...reasons];
@@ -684,7 +718,12 @@ export async function registerRoutes(
       const mainBrand = mainProduct.manufacturerName || "Ukendt";
       const mainPrice = mainProduct.price || 0;
       const mainMarginInfo = isHighMarginProduct(mainBrand, mainPrice);
-      const mainSpecs = extractSpecs(mainName);
+      
+      // Try to get specs from database first, fallback to extraction
+      const mainProductId = mainProduct.productId?.toString() || "product-0";
+      const dbProduct = await storage.getProductById(mainProductId);
+      const mainSpecs = (dbProduct?.specs as ExtractedSpecs) || extractSpecs(mainName);
+      console.log(`Main product ${mainProductId} specs from ${dbProduct ? 'database' : 'extraction'}:`, mainSpecs);
       
       let mainProductUrl = mainProduct.url || "";
       if (mainProductUrl && !mainProductUrl.startsWith("http")) {
@@ -692,7 +731,7 @@ export async function registerRoutes(
       }
       
       const reference = {
-        id: mainProduct.productId?.toString() || "product-0",
+        id: mainProductId,
         name: mainName,
         brand: mainBrand,
         price: mainPrice,
@@ -720,15 +759,14 @@ export async function registerRoutes(
         const referenceSpecs = reference.specs;
         const maxPrice = referencePrice * 1.5;
         
-        // Filter to products with complete specs and within price range
+        // Filter to products with RAM+Storage specs (CPU optional) and within price range
         const validDbProducts = dbAlternatives.filter((p) => {
           if (p.id === reference.id) return false;
           if (p.price > maxPrice) return false;
           
-          // Require complete specs for valid comparison
+          // Require at least RAM+Storage for valid comparison (CPU optional)
           const specs = p.specs as ExtractedSpecs | null;
           if (!specs) return false;
-          if (!specs.cpuTier || specs.cpuTier === 0) return false;
           if (!specs.ramGB || specs.ramGB === 0) return false;
           if (!specs.storageGB || specs.storageGB === 0) return false;
           

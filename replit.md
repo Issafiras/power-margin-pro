@@ -39,9 +39,13 @@ The server acts as a proxy to the Power.dk API, fetching laptop products and enr
 ### Database
 - **ORM**: Drizzle ORM configured for PostgreSQL
 - **Schema Location**: `shared/schema.ts`
-- **Current State**: Minimal schema with user authentication placeholder; primary data comes from external Power.dk API
+- **Products Table**: Stores synchronized laptop products from Power.dk API with specs and margin data
 
-The database is set up but minimally used. The application primarily relies on real-time API calls to Power.dk rather than persistent storage.
+The database stores synchronized laptop products via the "Synkroniser Database" feature. When products are synced:
+1. All 359 laptops are fetched from Power.dk API and stored in PostgreSQL
+2. Products are enriched with extracted specs (CPU, GPU, RAM, Storage)
+3. High-margin status is calculated and stored
+4. Search alternatives are fetched directly from the database when products exist
 
 ### Key Design Decisions
 - **Proxy Architecture**: Backend proxies Power.dk API to avoid CORS issues and add margin analysis
