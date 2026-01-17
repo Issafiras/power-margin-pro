@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { SearchBar } from "@/components/SearchBar";
 import { ProductCard } from "@/components/ProductCard";
 import { AlternativesTable } from "@/components/AlternativesTable";
@@ -7,8 +7,22 @@ import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Zap, FileText, FileSpreadsheet, Loader2 } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
+import { Zap, FileText, FileSpreadsheet, Loader2, RefreshCw, Database, CheckCircle2 } from "lucide-react";
 import type { SearchResponse } from "@shared/schema";
+
+interface DbStatus {
+  productCount: number;
+  hasProducts: boolean;
+}
+
+interface SyncResult {
+  success: boolean;
+  totalSynced: number;
+  totalInDatabase: number;
+  message: string;
+  error?: string;
+}
 
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -17,10 +31,44 @@ export default function Dashboard() {
   const [excelLoading, setExcelLoading] = useState(false);
   const { toast } = useToast();
 
-  const { data, isLoading, error, refetch } = useQuery<SearchResponse>({
-    queryKey: ['/api/search', searchQuery],
+  const { data: dbStatus, refetch: refetchDbStatus } = useQuery<DbStatus>({
+    queryKey: ['/api/db/status'],
     queryFn: async () => {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}`);
+      const res = await fetch('/api/db/status');
+      if (!res.ok) throw new Error('Failed to get DB status');
+      return res.json();
+    },
+    refetchInterval: 60000,
+  });
+
+  const syncMutation = useMutation<SyncResult>({
+    mutationFn: async () => {
+      const res = await fetch('/api/sync', { method: 'POST' });
+      if (!res.ok) throw new Error('Sync failed');
+      return res.json();
+    },
+    onSuccess: (result) => {
+      refetchDbStatus();
+      queryClient.invalidateQueries({ queryKey: ['/api/search'] });
+      toast({
+        title: "Synkronisering fuldført",
+        description: `${result.totalSynced} produkter synkroniseret til databasen`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Synkronisering fejlede",
+        description: error instanceof Error ? error.message : "Kunne ikke synkronisere produkter",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const { data, isLoading, error, refetch } = useQuery<SearchResponse>({
+    queryKey: ['/api/search', searchQuery, dbStatus?.hasProducts],
+    queryFn: async () => {
+      const useDb = dbStatus?.hasProducts ? 'true' : 'false';
+      const res = await fetch(`/api/search?q=${encodeURIComponent(searchQuery)}&db=${useDb}`);
       if (!res.ok) {
         throw new Error(`${res.status}: ${await res.text()}`);
       }
@@ -32,6 +80,10 @@ export default function Dashboard() {
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setHasSearched(true);
+  };
+
+  const handleSync = () => {
+    syncMutation.mutate();
   };
 
   const handleExportPdf = async () => {
@@ -145,6 +197,31 @@ export default function Dashboard() {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                {dbStatus?.hasProducts && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>{dbStatus.productCount} i database</span>
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={syncMutation.isPending}
+                  data-testid="button-sync"
+                  className="gap-2"
+                >
+                  {syncMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-4 w-4" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {syncMutation.isPending ? "Synkroniserer..." : "Synkroniser"}
+                  </span>
+                </Button>
+              </div>
               {data && data.products.length > 0 && (
                 <div className="flex items-center gap-2">
                   <Button
