@@ -1,8 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import axios from "axios";
+import PDFDocument from "pdfkit";
+import * as XLSX from "xlsx";
 import { storage } from "./storage";
-import type { InsertProduct } from "@shared/schema";
+import type { InsertProduct, ProductWithMargin } from "@shared/schema";
 
 const POWER_API_BASE = "https://www.power.dk/api/v2/productlists";
 const LAPTOP_CATEGORY_ID = 1341;
@@ -648,6 +650,181 @@ export async function registerRoutes(
         totalCount: 0,
         searchQuery: req.query.q || "",
       });
+    }
+  });
+
+  // PDF Export endpoint
+  app.post("/api/export/pdf", async (req, res) => {
+    try {
+      const { products, searchQuery } = req.body as {
+        products: ProductWithMargin[];
+        searchQuery: string;
+      };
+
+      if (!products || products.length === 0) {
+        return res.status(400).json({ error: "Ingen produkter at eksportere" });
+      }
+
+      const doc = new PDFDocument({ margin: 50, size: "A4" });
+      
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="power-produkter-${Date.now()}.pdf"`
+      );
+
+      doc.pipe(res);
+
+      // Header
+      doc.fontSize(20).text("Power.dk - Produktsammenligning", { align: "center" });
+      doc.moveDown(0.5);
+      
+      // Date and search info
+      const now = new Date();
+      doc.fontSize(10).fillColor("#666666");
+      doc.text(`Dato: ${now.toLocaleDateString("da-DK")} kl. ${now.toLocaleTimeString("da-DK")}`, { align: "center" });
+      doc.text(`Søgning: "${searchQuery}"`, { align: "center" });
+      doc.moveDown(1);
+
+      // Table setup
+      const tableTop = doc.y;
+      const colWidths = [180, 70, 70, 100, 75];
+      const colHeaders = ["Produkt", "Mærke", "Pris (DKK)", "Specs", "Avance"];
+      const startX = 50;
+      const rowHeight = 40;
+      
+      // Draw table header
+      doc.fontSize(9).fillColor("#FFFFFF");
+      doc.rect(startX, tableTop, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
+      
+      let xPos = startX;
+      colHeaders.forEach((header, i) => {
+        doc.fillColor("#FFFFFF").text(header, xPos + 4, tableTop + 5, { width: colWidths[i] - 8, height: 15 });
+        xPos += colWidths[i];
+      });
+      
+      // Draw table rows
+      let yPos = tableTop + 20;
+      
+      products.forEach((product, index) => {
+        // Check for page break
+        if (yPos > 720) {
+          doc.addPage();
+          yPos = 50;
+          
+          // Redraw header on new page
+          doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
+          xPos = startX;
+          colHeaders.forEach((header, i) => {
+            doc.fillColor("#FFFFFF").text(header, xPos + 4, yPos + 5, { width: colWidths[i] - 8, height: 15 });
+            xPos += colWidths[i];
+          });
+          yPos += 20;
+        }
+        
+        const isHighMargin = product.isHighMargin;
+        const rowColor = isHighMargin ? "#FFF5EB" : (index % 2 === 0 ? "#FFFFFF" : "#F8F8F8");
+        
+        // Row background
+        doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).fill(rowColor);
+        
+        // Row border
+        doc.strokeColor("#DDDDDD").lineWidth(0.5);
+        doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).stroke();
+        
+        // Cell data
+        const specs = product.specs || {};
+        const specText = [specs.cpu, specs.ram, specs.storage].filter(Boolean).join(", ");
+        const marginText = isHighMargin ? `Høj${product.marginReason ? "\n(" + product.marginReason + ")" : ""}` : "Standard";
+        
+        const rowData = [
+          (isHighMargin ? "★ " : "") + product.name.substring(0, 50) + (product.name.length > 50 ? "..." : ""),
+          product.brand,
+          product.price.toLocaleString("da-DK"),
+          specText.substring(0, 35) + (specText.length > 35 ? "..." : ""),
+          marginText,
+        ];
+        
+        xPos = startX;
+        doc.fontSize(7).fillColor(isHighMargin ? "#FF6600" : "#333333");
+        
+        rowData.forEach((cell, i) => {
+          doc.text(cell, xPos + 3, yPos + 4, { width: colWidths[i] - 6, height: rowHeight - 8 });
+          xPos += colWidths[i];
+        });
+        
+        yPos += rowHeight;
+      });
+
+      // Footer
+      doc.fontSize(8).fillColor("#999999");
+      doc.text(`Genereret af Power Margin Optimizer Pro - ${products.length} produkter`, 50, 780, { align: "center" });
+
+      doc.end();
+      
+    } catch (error: any) {
+      console.error("PDF export error:", error.message);
+      res.status(500).json({ error: "Fejl ved PDF-eksport: " + error.message });
+    }
+  });
+
+  // Excel Export endpoint
+  app.post("/api/export/excel", async (req, res) => {
+    try {
+      const { products, searchQuery } = req.body as {
+        products: ProductWithMargin[];
+        searchQuery: string;
+      };
+
+      if (!products || products.length === 0) {
+        return res.status(400).json({ error: "Ingen produkter at eksportere" });
+      }
+
+      // Prepare data for Excel
+      const data = products.map((product) => ({
+        "Produkt": product.name,
+        "Mærke": product.brand,
+        "Pris (DKK)": product.price,
+        "Original Pris": product.originalPrice || "",
+        "CPU": product.specs?.cpu || "",
+        "RAM": product.specs?.ram || "",
+        "Lagerplads": product.specs?.storage || "",
+        "Høj Avance": product.isHighMargin ? "Ja" : "Nej",
+        "Grund": product.marginReason || "",
+      }));
+
+      // Create workbook and worksheet
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      
+      // Set column widths
+      worksheet["!cols"] = [
+        { wch: 50 }, // Produkt
+        { wch: 15 }, // Mærke
+        { wch: 12 }, // Pris
+        { wch: 12 }, // Original Pris
+        { wch: 25 }, // CPU
+        { wch: 10 }, // RAM
+        { wch: 12 }, // Lagerplads
+        { wch: 10 }, // Høj Avance
+        { wch: 20 }, // Grund
+      ];
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Produkter");
+
+      // Generate buffer
+      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="power-produkter-${Date.now()}.xlsx"`
+      );
+      res.send(buffer);
+      
+    } catch (error: any) {
+      console.error("Excel export error:", error.message);
+      res.status(500).json({ error: "Fejl ved Excel-eksport: " + error.message });
     }
   });
 

@@ -6,12 +6,17 @@ import { AlternativesTable } from "@/components/AlternativesTable";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
 import { Badge } from "@/components/ui/badge";
-import { Laptop, Zap } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { Laptop, Zap, FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 import type { SearchResponse } from "@shared/schema";
 
 export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [excelLoading, setExcelLoading] = useState(false);
+  const { toast } = useToast();
 
   const { data, isLoading, error, refetch } = useQuery<SearchResponse>({
     queryKey: ['/api/search', searchQuery],
@@ -28,6 +33,94 @@ export default function Dashboard() {
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setHasSearched(true);
+  };
+
+  const handleExportPdf = async () => {
+    if (!data?.products) return;
+    
+    setPdfLoading(true);
+    try {
+      const response = await fetch("/api/export/pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          products: data.products,
+          searchQuery: searchQuery,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Fejl ved PDF-eksport");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `power-produkter-${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "PDF eksporteret",
+        description: `${data.products.length} produkter eksporteret til PDF`,
+      });
+    } catch (error) {
+      toast({
+        title: "Eksport fejlede",
+        description: error instanceof Error ? error.message : "Kunne ikke eksportere til PDF",
+        variant: "destructive",
+      });
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    if (!data?.products) return;
+    
+    setExcelLoading(true);
+    try {
+      const response = await fetch("/api/export/excel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          products: data.products,
+          searchQuery: searchQuery,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Fejl ved Excel-eksport");
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `power-produkter-${Date.now()}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast({
+        title: "Excel eksporteret",
+        description: `${data.products.length} produkter eksporteret til Excel`,
+      });
+    } catch (error) {
+      toast({
+        title: "Eksport fejlede",
+        description: error instanceof Error ? error.message : "Kunne ikke eksportere til Excel",
+        variant: "destructive",
+      });
+    } finally {
+      setExcelLoading(false);
+    }
   };
 
   const mainProduct = data?.products?.[0];
@@ -58,6 +151,41 @@ export default function Dashboard() {
             </div>
           </div>
           <SearchBar onSearch={handleSearch} isLoading={isLoading} />
+          
+          {data && data.products.length > 0 && (
+            <div className="flex items-center gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportPdf}
+                disabled={pdfLoading}
+                className="border-primary/50 hover:bg-primary/10"
+                data-testid="button-export-pdf"
+              >
+                {pdfLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 mr-2" />
+                )}
+                Eksportér til PDF
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportExcel}
+                disabled={excelLoading}
+                className="border-primary/50 hover:bg-primary/10"
+                data-testid="button-export-excel"
+              >
+                {excelLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                )}
+                Eksportér til Excel
+              </Button>
+            </div>
+          )}
         </div>
       </header>
 
