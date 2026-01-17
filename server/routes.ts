@@ -612,66 +612,92 @@ export async function registerRoutes(
         const dbResults = await storage.searchProducts(query);
         
         if (dbResults.length > 0) {
-          // Convert DB products to response format with upgrade scoring
-          const allProducts = dbResults.map((item) => ({
-            id: item.id,
-            name: item.name,
-            brand: item.brand,
-            price: item.price,
-            originalPrice: item.originalPrice ?? undefined,
-            imageUrl: item.imageUrl ?? undefined,
-            productUrl: item.productUrl,
-            sku: item.sku ?? undefined,
-            inStock: item.inStock ?? true,
-            isHighMargin: item.isHighMargin ?? false,
-            marginReason: item.marginReason ?? undefined,
-            specs: item.specs ?? {},
+          // Get the reference product from search results
+          const refItem = dbResults[0];
+          const reference = {
+            id: refItem.id,
+            name: refItem.name,
+            brand: refItem.brand,
+            price: refItem.price,
+            originalPrice: refItem.originalPrice ?? undefined,
+            imageUrl: refItem.imageUrl ?? undefined,
+            productUrl: refItem.productUrl,
+            sku: refItem.sku ?? undefined,
+            inStock: refItem.inStock ?? true,
+            isHighMargin: refItem.isHighMargin ?? false,
+            marginReason: refItem.marginReason ?? undefined,
+            specs: refItem.specs ?? {},
             isTopPick: false,
             priceDifference: 0,
             upgradeScore: 0,
-          }));
+          };
           
-          let products = allProducts;
+          // Fetch ALL products from database to find alternatives (not just search results)
+          const allDbProducts = await storage.getAllProducts();
+          const referencePrice = reference.price;
+          const referenceSpecs = reference.specs as ExtractedSpecs;
+          // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
+          const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
           
-          if (allProducts.length > 1) {
-            const reference = allProducts[0];
-            const referencePrice = reference.price;
-            const referenceSpecs = reference.specs as ExtractedSpecs;
-            const maxPrice = referencePrice * 1.5;
+          // Filter to valid alternatives with RAM+Storage specs
+          const validDbProducts = allDbProducts.filter((p) => {
+            if (p.id === reference.id) return false;
+            if (p.price > maxPrice) return false;
             
-            const scoredAlternatives = allProducts.slice(1).map((alt: any) => {
-              const priceDiff = alt.price - referencePrice;
-              const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
-                alt.specs,
-                referenceSpecs,
-                alt.isHighMargin,
-                alt.price,
-                referencePrice
-              );
-              
-              return {
-                ...alt,
-                priceDifference: priceDiff,
-                upgradeScore: score,
-                isValidUpgrade,
-                upgradeReason,
-              };
-            });
+            const specs = p.specs as ExtractedSpecs | null;
+            if (!specs) return false;
+            if (!specs.ramGB || specs.ramGB === 0) return false;
+            if (!specs.storageGB || specs.storageGB === 0) return false;
             
-            const validUpgrades = scoredAlternatives
-              .filter((alt: any) => alt.isValidUpgrade && alt.price <= maxPrice)
-              .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
-              .slice(0, 8);
+            return true;
+          });
+          
+          const scoredAlternatives = validDbProducts.map((p) => {
+            const specs = (p.specs as ExtractedSpecs) || {};
+            const priceDiff = p.price - referencePrice;
+            const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
+              specs,
+              referenceSpecs,
+              p.isHighMargin ?? false,
+              p.price,
+              referencePrice,
+              maxPrice
+            );
             
-            const topPickIndex = findTopPick(validUpgrades);
-            if (topPickIndex >= 0) {
-              validUpgrades[topPickIndex].isTopPick = true;
-            }
-            
-            products = [reference, ...validUpgrades];
+            return {
+              id: p.id,
+              name: p.name,
+              brand: p.brand,
+              price: p.price,
+              originalPrice: p.originalPrice ?? undefined,
+              imageUrl: p.imageUrl ?? undefined,
+              productUrl: p.productUrl,
+              sku: p.sku ?? undefined,
+              inStock: p.inStock ?? true,
+              isHighMargin: p.isHighMargin ?? false,
+              marginReason: p.marginReason ?? undefined,
+              specs,
+              isTopPick: false,
+              priceDifference: priceDiff,
+              upgradeScore: score,
+              isValidUpgrade,
+              upgradeReason,
+            };
+          });
+          
+          const validUpgrades = scoredAlternatives
+            .filter((alt) => alt.isValidUpgrade)
+            .sort((a, b) => b.upgradeScore - a.upgradeScore)
+            .slice(0, 8);
+          
+          const topPickIndex = findTopPick(validUpgrades);
+          if (topPickIndex >= 0) {
+            validUpgrades[topPickIndex].isTopPick = true;
           }
           
-          console.log(`Found ${products.length} products in database for "${query}"`);
+          const products = [reference, ...validUpgrades];
+          
+          console.log(`Found ${products.length} products (1 reference + ${validUpgrades.length} alternatives) from database for "${query}"`);
           return res.json({
             products,
             totalCount: dbResults.length,
