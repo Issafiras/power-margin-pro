@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { SearchBar } from "@/components/SearchBar";
 import { ProductCard } from "@/components/ProductCard";
@@ -6,14 +6,22 @@ import { AlternativesTable } from "@/components/AlternativesTable";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { Zap, FileText, FileSpreadsheet, Loader2, RefreshCw, Database, CheckCircle2 } from "lucide-react";
+import { 
+  Zap, FileText, FileSpreadsheet, Loader2, RefreshCw, 
+  Database, CheckCircle2, TrendingUp, Package, Sparkles,
+  ArrowRight, Clock
+} from "lucide-react";
 import type { SearchResponse } from "@shared/schema";
 
 interface DbStatus {
   productCount: number;
   hasProducts: boolean;
+  highMarginCount?: number;
+  lastSync?: string;
 }
 
 interface SyncResult {
@@ -29,6 +37,7 @@ export default function Dashboard() {
   const [hasSearched, setHasSearched] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [excelLoading, setExcelLoading] = useState(false);
+  const [showComparison, setShowComparison] = useState(false);
   const { toast } = useToast();
 
   const { data: dbStatus, refetch: refetchDbStatus } = useQuery<DbStatus>({
@@ -52,13 +61,13 @@ export default function Dashboard() {
       queryClient.invalidateQueries({ queryKey: ['/api/search'] });
       toast({
         title: "Synkronisering fuldført",
-        description: `${result.totalSynced} produkter synkroniseret til databasen`,
+        description: `${result.totalSynced} produkter opdateret`,
       });
     },
     onError: (error) => {
       toast({
         title: "Synkronisering fejlede",
-        description: error instanceof Error ? error.message : "Kunne ikke synkronisere produkter",
+        description: error instanceof Error ? error.message : "Kunne ikke synkronisere",
         variant: "destructive",
       });
     },
@@ -80,6 +89,7 @@ export default function Dashboard() {
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setHasSearched(true);
+    setShowComparison(false);
   };
 
   const handleSync = () => {
@@ -88,23 +98,14 @@ export default function Dashboard() {
 
   const handleExportPdf = async () => {
     if (!data?.products) return;
-    
     setPdfLoading(true);
     try {
       const response = await fetch("/api/export/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          products: data.products,
-          searchQuery: searchQuery,
-        }),
+        body: JSON.stringify({ products: data.products, searchQuery }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Fejl ved PDF-eksport");
-      }
-
+      if (!response.ok) throw new Error("Fejl ved PDF-eksport");
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -114,17 +115,9 @@ export default function Dashboard() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
-      toast({
-        title: "PDF eksporteret",
-        description: `${data.products.length} produkter eksporteret til PDF`,
-      });
+      toast({ title: "PDF eksporteret", description: `${data.products.length} produkter` });
     } catch (error) {
-      toast({
-        title: "Eksport fejlede",
-        description: error instanceof Error ? error.message : "Kunne ikke eksportere til PDF",
-        variant: "destructive",
-      });
+      toast({ title: "Eksport fejlede", variant: "destructive" });
     } finally {
       setPdfLoading(false);
     }
@@ -132,23 +125,14 @@ export default function Dashboard() {
 
   const handleExportExcel = async () => {
     if (!data?.products) return;
-    
     setExcelLoading(true);
     try {
       const response = await fetch("/api/export/excel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          products: data.products,
-          searchQuery: searchQuery,
-        }),
+        body: JSON.stringify({ products: data.products, searchQuery }),
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "Fejl ved Excel-eksport");
-      }
-
+      if (!response.ok) throw new Error("Fejl ved Excel-eksport");
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -158,17 +142,9 @@ export default function Dashboard() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
-      toast({
-        title: "Excel eksporteret",
-        description: `${data.products.length} produkter eksporteret til Excel`,
-      });
+      toast({ title: "Excel eksporteret", description: `${data.products.length} produkter` });
     } catch (error) {
-      toast({
-        title: "Eksport fejlede",
-        description: error instanceof Error ? error.message : "Kunne ikke eksportere til Excel",
-        variant: "destructive",
-      });
+      toast({ title: "Eksport fejlede", variant: "destructive" });
     } finally {
       setExcelLoading(false);
     }
@@ -176,66 +152,39 @@ export default function Dashboard() {
 
   const mainProduct = data?.products?.[0];
   const alternatives = data?.products?.slice(1) || [];
+  const topPick = alternatives.find(a => a.isTopPick);
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Hero gradient overlay */}
       <div className="hero-gradient fixed inset-0 pointer-events-none" />
       
       <header className="sticky top-0 z-[9999] glass-strong border-b border-white/5">
-        <div className="container mx-auto px-4 py-5">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/20 animate-float">
-                <Zap className="h-7 w-7 text-primary-foreground" />
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex items-center justify-between gap-4 mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/60 flex items-center justify-center shadow-xl shadow-primary/25 animate-float">
+                <Zap className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold tracking-tight">
-                  <span className="text-gradient">Power</span> Margin Optimizer
+                <h1 className="text-xl font-bold tracking-tight">
+                  <span className="text-gradient">Power</span> Margin Pro
                 </h1>
-                <p className="text-sm text-muted-foreground/80">Find avancestærke produkter til Power.dk</p>
+                <p className="text-[11px] text-muted-foreground/70 tracking-wide">Optimizer til høj-avance produkter</p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                {dbStatus?.hasProducts && (
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs">
-                    <CheckCircle2 className="h-3 w-3" />
-                    <span>{dbStatus.productCount} i database</span>
-                  </div>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSync}
-                  disabled={syncMutation.isPending}
-                  data-testid="button-sync"
-                  className="gap-2"
-                >
-                  {syncMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4" />
-                  )}
-                  <span className="hidden sm:inline">
-                    {syncMutation.isPending ? "Synkroniserer..." : "Synkroniser"}
-                  </span>
-                </Button>
-              </div>
+
+            <div className="flex items-center gap-2">
               {data && data.products.length > 0 && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 mr-2">
                   <Button
                     variant="ghost"
                     size="icon"
                     onClick={handleExportPdf}
                     disabled={pdfLoading}
                     data-testid="button-export-pdf"
+                    className="h-8 w-8"
                   >
-                    {pdfLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileText className="h-4 w-4" />
-                    )}
+                    {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                   </Button>
                   <Button
                     variant="ghost"
@@ -243,17 +192,64 @@ export default function Dashboard() {
                     onClick={handleExportExcel}
                     disabled={excelLoading}
                     data-testid="button-export-excel"
+                    className="h-8 w-8"
                   >
-                    {excelLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <FileSpreadsheet className="h-4 w-4" />
-                    )}
+                    {excelLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
                   </Button>
                 </div>
               )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSync}
+                disabled={syncMutation.isPending}
+                data-testid="button-sync"
+                className="gap-2 h-8"
+              >
+                {syncMutation.isPending ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-3.5 w-3.5" />
+                )}
+                <span className="hidden sm:inline text-xs">
+                  {syncMutation.isPending ? "Synkroniserer..." : "Synkroniser"}
+                </span>
+              </Button>
             </div>
           </div>
+
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="stat-card rounded-xl p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Package className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Produkter</p>
+                <p className="text-lg font-bold text-foreground">{dbStatus?.productCount || 0}</p>
+              </div>
+            </div>
+            <div className="stat-card rounded-xl p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
+                <Sparkles className="h-4 w-4 text-primary" />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Høj Avance</p>
+                <p className="text-lg font-bold text-primary">{dbStatus?.highMarginCount || "—"}</p>
+              </div>
+            </div>
+            <div className="stat-card rounded-xl p-3 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <CheckCircle2 className="h-4 w-4 text-green-500" />
+              </div>
+              <div>
+                <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Status</p>
+                <p className="text-sm font-semibold text-green-500">
+                  {dbStatus?.hasProducts ? "Klar" : "Synkroniser"}
+                </p>
+              </div>
+            </div>
+          </div>
+
           <SearchBar onSearch={handleSearch} isLoading={isLoading} />
         </div>
       </header>
@@ -266,74 +262,123 @@ export default function Dashboard() {
         {hasSearched && error && (
           <EmptyState 
             type="error" 
-            message={error instanceof Error ? error.message : "Der opstod en fejl under søgningen."} 
+            message={error instanceof Error ? error.message : "Der opstod en fejl."} 
           />
         )}
         
         {hasSearched && !isLoading && !error && data && data.products.length === 0 && (
           <EmptyState 
             type="no-results" 
-            message={`Ingen produkter fundet for "${searchQuery}". Prøv et andet søgeord.`} 
+            message={`Ingen produkter fundet for "${searchQuery}".`} 
           />
         )}
         
         {hasSearched && !isLoading && !error && data && data.products.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-1">
-              <div className="sticky top-[220px]">
-                <div className="mb-4">
-                  <h2 className="text-xs font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-8 h-px bg-gradient-to-r from-primary to-transparent" />
-                    Kundens Valg
-                  </h2>
+          <>
+            {mainProduct && topPick && (
+              <Card className="mb-6 p-4 glass-card border-primary/20 animate-scale-in">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                  <div className="flex items-center gap-4">
+                    <Badge className="badge-premium gap-1.5">
+                      <TrendingUp className="h-3 w-3" />
+                      Hurtig Anbefaling
+                    </Badge>
+                    <p className="text-sm text-muted-foreground">
+                      Skift fra <span className="text-foreground font-medium">{mainProduct.brand}</span> til{" "}
+                      <span className="text-primary font-semibold">{topPick.brand} {topPick.name.slice(0, 30)}...</span>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">Merpris</p>
+                      <p className={`text-sm font-bold ${(topPick.priceDifference || 0) > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {(topPick.priceDifference || 0) > 0 ? '+' : ''}{topPick.priceDifference?.toLocaleString('da-DK')} kr
+                      </p>
+                    </div>
+                    <Button 
+                      size="sm" 
+                      className="gap-2"
+                      onClick={() => setShowComparison(!showComparison)}
+                    >
+                      {showComparison ? 'Skjul' : 'Sammenlign'}
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
-                {mainProduct && (
-                  <ProductCard product={mainProduct} variant="main" />
-                )}
                 
-                <div className="mt-6 p-4 rounded-xl stat-card">
-                  <h3 className="text-xs font-semibold text-foreground mb-3 uppercase tracking-wide">Avance-logik</h3>
-                  <ul className="text-xs text-muted-foreground space-y-2.5">
-                    <li className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-primary shadow-lg shadow-primary/30" />
-                      <span>Cepter brand = Høj avance</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <div className="w-2 h-2 rounded-full bg-primary shadow-lg shadow-primary/30" />
-                      <span>Pris ender på "98" = Høj avance</span>
-                    </li>
-                    <li className="flex items-center gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
-                      <span className="text-muted-foreground/70">Andre = Lav avance</span>
-                    </li>
-                  </ul>
+                {showComparison && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 pt-4 border-t border-white/5 animate-slide-up">
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Kundens Valg</p>
+                      <div className="p-3 rounded-lg bg-muted/20 border border-white/5">
+                        <p className="text-sm font-medium line-clamp-1">{mainProduct.name}</p>
+                        <p className="text-xl font-bold mt-1">{mainProduct.price.toLocaleString('da-DK')} kr</p>
+                        <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
+                          {mainProduct.specs?.cpu && <span>{mainProduct.specs.cpu}</span>}
+                          {mainProduct.specs?.ram && <span>• {mainProduct.specs.ram}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-primary uppercase tracking-widest flex items-center gap-1.5">
+                        <Sparkles className="h-3 w-3" />
+                        Anbefalet Alternativ
+                      </p>
+                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <p className="text-sm font-medium line-clamp-1">{topPick.name}</p>
+                        <p className="text-xl font-bold mt-1 text-primary">{topPick.price.toLocaleString('da-DK')} kr</p>
+                        <div className="flex gap-2 mt-2 text-xs text-muted-foreground">
+                          {topPick.specs?.cpu && <span>{topPick.specs.cpu}</span>}
+                          {topPick.specs?.ram && <span>• {topPick.specs.ram}</span>}
+                        </div>
+                        {topPick.upgradeReason && (
+                          <Badge variant="outline" className="mt-2 text-[10px]">{topPick.upgradeReason}</Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </Card>
+            )}
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-1">
+                <div className="sticky top-[280px]">
+                  <div className="mb-3">
+                    <h2 className="text-[10px] font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
+                      <span className="w-6 h-px bg-gradient-to-r from-primary to-transparent" />
+                      Kundens Valg
+                    </h2>
+                  </div>
+                  {mainProduct && <ProductCard product={mainProduct} variant="main" />}
                 </div>
               </div>
-            </div>
 
-            <div className="lg:col-span-2">
-              <div className="mb-4 flex items-center justify-between gap-4">
-                <h2 className="text-xs font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
-                  <span className="w-8 h-px bg-gradient-to-r from-primary to-transparent" />
-                  Alternativer
-                </h2>
-                <span className="text-xs text-muted-foreground/60 px-2.5 py-1 rounded-full bg-muted/30">
-                  {alternatives.length} fundet
-                </span>
+              <div className="lg:col-span-2">
+                <div className="mb-3 flex items-center justify-between gap-4">
+                  <h2 className="text-[10px] font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-6 h-px bg-gradient-to-r from-primary to-transparent" />
+                    Høj-Avance Alternativer
+                  </h2>
+                  <Badge variant="outline" className="text-[10px] gap-1">
+                    <Sparkles className="h-2.5 w-2.5" />
+                    {alternatives.length} fundet
+                  </Badge>
+                </div>
+                <AlternativesTable 
+                  alternatives={alternatives} 
+                  referencePrice={mainProduct?.price || 0} 
+                />
               </div>
-              <AlternativesTable 
-                alternatives={alternatives} 
-                referencePrice={mainProduct?.price || 0} 
-              />
             </div>
-          </div>
+          </>
         )}
       </main>
 
       <footer className="border-t border-white/5 mt-auto glass">
-        <div className="container mx-auto px-4 py-6">
-          <p className="text-xs text-center text-muted-foreground/50">
-            Power Margin Optimizer Pro — Internt værktøj til Power.dk
+        <div className="container mx-auto px-4 py-4">
+          <p className="text-[10px] text-center text-muted-foreground/40 tracking-wide">
+            Power Margin Optimizer Pro v2.0 — Designet til at maksimere avance
           </p>
         </div>
       </footer>
