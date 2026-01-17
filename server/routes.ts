@@ -262,11 +262,14 @@ function getImageUrl(productImage: any): string | undefined {
   const variants = productImage.variants || [];
   
   if (variants.length > 0 && variants[0].filename) {
-    const imagePath = `${basePath}${variants[0].filename}`;
+    // Add slash between basePath and filename
+    const separator = basePath.endsWith("/") ? "" : "/";
+    const imagePath = `${basePath}${separator}${variants[0].filename}`;
     if (imagePath.startsWith("http")) {
       return imagePath;
     }
-    return `https://www.power.dk${imagePath}`;
+    // Images are hosted on Power's CDN, not main domain
+    return `https://media.power-cdn.net${imagePath}`;
   }
   
   return undefined;

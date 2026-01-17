@@ -109,6 +109,7 @@ export function AlternativesTable({ alternatives, referencePrice }: Alternatives
                           alt={product.name}
                           className="w-full h-full object-contain"
                           loading="lazy"
+                          referrerPolicy="no-referrer"
                         />
                       </div>
                     )}

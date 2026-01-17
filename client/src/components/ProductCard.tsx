@@ -75,6 +75,7 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
               alt={product.name}
               className="w-full h-full object-contain"
               loading="lazy"
+              referrerPolicy="no-referrer"
             />
           </div>
         )}
