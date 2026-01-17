@@ -24,11 +24,16 @@ interface ExtractedSpecs {
   cpuTier?: number;
   gpu?: string;
   gpuTier?: number;
+  gpuVram?: number;
   ram?: string;
   ramGB?: number;
   storage?: string;
   storageGB?: number;
-  screenSize?: number;
+  screenSize?: string;
+  screenType?: string;
+  screenResolution?: string;
+  features?: string[];
+  os?: string;
 }
 
 // CPU Tier mapping based on buying guide (S=10, A=8, B=6, C=4, D=1)
@@ -293,12 +298,75 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
     }
   }
   
-  const screenMatch = productName.match(/(\d{1,2}(?:\.\d)?)["\u2033-]?\s*(?:inch|tommer|"|'')?/i);
+  // Extract screen size (e.g., 14", 15,6", 17,3")
+  const screenMatch = searchText.match(/(\d{1,2})[,.]?(\d)?["\u2033]?\s*(?:inch|tommer)?/i);
   if (screenMatch) {
-    const size = parseFloat(screenMatch[1]);
+    const sizeStr = screenMatch[2] ? `${screenMatch[1]},${screenMatch[2]}"` : `${screenMatch[1]}"`;
+    const size = parseFloat(screenMatch[1] + (screenMatch[2] ? '.' + screenMatch[2] : ''));
     if (size >= 10 && size <= 18) {
-      specs.screenSize = size;
+      specs.screenSize = sizeStr;
     }
+  }
+  
+  // Extract screen type (OLED, IPS, TN, VA, etc.)
+  const screenTypeMatch = searchText.match(/\b(OLED|IPS|TN|VA|Full\s*HD|FHD|QHD|4K|UHD|Retina|AMOLED|Mini-?LED)\b/i);
+  if (screenTypeMatch) {
+    specs.screenType = screenTypeMatch[1].toUpperCase().replace(/\s+/g, '');
+  }
+  
+  // Extract screen resolution
+  const resolutionMatch = searchText.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})/i);
+  if (resolutionMatch) {
+    specs.screenResolution = `${resolutionMatch[1]}x${resolutionMatch[2]}`;
+  }
+  
+  // Extract GPU VRAM (e.g., "6 GB", "8 GB" after GPU name)
+  const gpuVramMatch = searchText.match(/(?:RTX|GTX|GeForce|Radeon)[^\n]*?(\d+)\s*GB/i);
+  if (gpuVramMatch) {
+    specs.gpuVram = parseInt(gpuVramMatch[1], 10);
+  }
+  
+  // Extract operating system
+  const osPatterns = [
+    /Windows\s+1[01]\s*(?:Home|Pro|S)?/i,
+    /macOS[^\n]*/i,
+    /Chrome\s*OS/i,
+    /Linux/i,
+  ];
+  for (const pattern of osPatterns) {
+    const match = searchText.match(pattern);
+    if (match) {
+      specs.os = match[0].trim();
+      break;
+    }
+  }
+  
+  // Extract features
+  const features: string[] = [];
+  const featurePatterns: [RegExp, string][] = [
+    [/USB-C|USB\s*Type-C/i, "USB-C"],
+    [/Thunderbolt\s*\d?/i, "Thunderbolt"],
+    [/DisplayPort|DP/i, "DisplayPort"],
+    [/HDMI/i, "HDMI"],
+    [/Touchsk\u00e6rm|Touch\s*screen|Touchdisplay/i, "Touchskærm"],
+    [/Fingeraftryk|Fingerprint/i, "Fingeraftryk"],
+    [/Baggrundsbelyst|Backlit\s*keyboard/i, "Baggrundsbelyst tastatur"],
+    [/WiFi\s*6E?|Wi-Fi\s*6E?/i, "WiFi 6"],
+    [/Bluetooth\s*\d+\.?\d*/i, "Bluetooth"],
+    [/Webcam|Kamera/i, "Webcam"],
+    [/Copilot\+?\s*PC/i, "Copilot+ PC"],
+    [/2-i-1|2-in-1|Convertible/i, "2-i-1"],
+    [/NVMe|PCIe\s*(?:Gen\s*)?\d/i, "NVMe SSD"],
+  ];
+  
+  for (const [pattern, label] of featurePatterns) {
+    if (pattern.test(searchText)) {
+      features.push(label);
+    }
+  }
+  
+  if (features.length > 0) {
+    specs.features = features;
   }
   
   return specs;

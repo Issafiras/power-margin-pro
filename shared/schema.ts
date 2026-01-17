@@ -21,11 +21,16 @@ export const productSpecsSchema = z.object({
   cpuTier: z.number().optional(),
   gpu: z.string().optional(),
   gpuTier: z.number().optional(),
+  gpuVram: z.number().optional(),
   ram: z.string().optional(),
   ramGB: z.number().optional(),
   storage: z.string().optional(),
   storageGB: z.number().optional(),
-  screenSize: z.number().optional(),
+  screenSize: z.string().optional(),
+  screenType: z.string().optional(),
+  screenResolution: z.string().optional(),
+  features: z.array(z.string()).optional(),
+  os: z.string().optional(),
 });
 
 export type ProductSpecs = z.infer<typeof productSpecsSchema>;

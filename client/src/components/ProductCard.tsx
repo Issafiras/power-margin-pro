@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Copy, Check, ExternalLink, Trophy, TrendingUp, TrendingDown, Cpu, MemoryStick, HardDrive, Sparkles } from "lucide-react";
+import { Copy, Check, ExternalLink, Trophy, TrendingUp, TrendingDown, Cpu, MemoryStick, HardDrive, Sparkles, Monitor, Layers, Zap } from "lucide-react";
 import { useState } from "react";
 import type { ProductWithMargin } from "@shared/schema";
 import { formatPrice } from "@/lib/specExtractor";
@@ -124,7 +124,7 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
           )}
         </div>
         
-        {product.specs && (product.specs.cpu || product.specs.ram || product.specs.storage) && (
+        {product.specs && (product.specs.cpu || product.specs.ram || product.specs.storage || product.specs.gpu || product.specs.screenSize) && (
           <div className="grid grid-cols-1 gap-2 p-3 rounded-lg bg-white/[0.02] border border-white/5">
             {product.specs.cpu && (
               <div className="flex items-center gap-2.5 text-sm">
@@ -132,6 +132,16 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
                   <Cpu className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <span className="text-foreground/80 truncate">{product.specs.cpu}</span>
+              </div>
+            )}
+            {product.specs.gpu && (
+              <div className="flex items-center gap-2.5 text-sm">
+                <div className="w-7 h-7 rounded-lg icon-container flex items-center justify-center">
+                  <Layers className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <span className="text-foreground/80 truncate">
+                  {product.specs.gpu}{product.specs.gpuVram ? ` ${product.specs.gpuVram} GB` : ''}
+                </span>
               </div>
             )}
             {product.specs.ram && (
@@ -148,6 +158,29 @@ export function ProductCard({ product, variant = "main", referencePrice }: Produ
                   <HardDrive className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <span className="text-foreground/80 truncate">{product.specs.storage}</span>
+              </div>
+            )}
+            {product.specs.screenSize && (
+              <div className="flex items-center gap-2.5 text-sm">
+                <div className="w-7 h-7 rounded-lg icon-container flex items-center justify-center">
+                  <Monitor className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <span className="text-foreground/80 truncate">
+                  {product.specs.screenSize}
+                  {product.specs.screenType ? ` ${product.specs.screenType}` : ''}
+                  {product.specs.screenResolution ? ` (${product.specs.screenResolution})` : ''}
+                </span>
+              </div>
+            )}
+            {product.specs.features && product.specs.features.length > 0 && (
+              <div className="flex items-start gap-2.5 text-sm">
+                <div className="w-7 h-7 rounded-lg icon-container flex items-center justify-center flex-shrink-0">
+                  <Zap className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <span className="text-foreground/80 text-xs leading-relaxed">
+                  {product.specs.features.slice(0, 4).join(", ")}
+                  {product.specs.features.length > 4 ? ` +${product.specs.features.length - 4}` : ''}
+                </span>
               </div>
             )}
           </div>
