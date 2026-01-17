@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import axios from "axios";
+import { storage } from "./storage";
+import type { InsertProduct } from "@shared/schema";
 
 const POWER_API_BASE = "https://www.power.dk/api/v2/productlists";
 const LAPTOP_CATEGORY_ID = 1341;
@@ -280,9 +282,122 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
+  // Sync all laptops from Power.dk to database
+  app.post("/api/sync", async (req, res) => {
+    try {
+      const pageSize = 50;
+      let from = 0;
+      let totalSynced = 0;
+      let hasMore = true;
+      
+      console.log("Starting sync of all laptops from Power.dk...");
+      
+      const headers = {
+        "User-Agent": getRandomUserAgent(),
+        "Accept": "application/json",
+        "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
+        "Referer": "https://www.power.dk/",
+        "Origin": "https://www.power.dk",
+      };
+      
+      while (hasMore) {
+        const url = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=${pageSize}&from=${from}`;
+        console.log(`Fetching page from=${from}, size=${pageSize}`);
+        
+        const response = await axios.get(url, { headers, timeout: 30000 });
+        const data = response.data;
+        const rawProducts = data?.products || [];
+        const totalCount = data?.totalProductCount || 0;
+        
+        if (rawProducts.length === 0) {
+          hasMore = false;
+          break;
+        }
+        
+        const productsToInsert: InsertProduct[] = rawProducts.map((item: any, index: number) => {
+          const name = item.title || "Ukendt produkt";
+          const brand = item.manufacturerName || "Ukendt";
+          const price = item.price || 0;
+          const originalPrice = item.previousPrice;
+          const productId = item.productId?.toString() || `product-${from}-${index}`;
+          const imageUrl = getImageUrl(item.productImage);
+          
+          let productUrl = item.url || "";
+          if (productUrl && !productUrl.startsWith("http")) {
+            productUrl = `https://www.power.dk${productUrl}`;
+          }
+          
+          const marginInfo = isHighMarginProduct(brand, price);
+          const specs = extractSpecs(name);
+          
+          return {
+            id: productId,
+            name,
+            brand,
+            price,
+            originalPrice: originalPrice || null,
+            imageUrl: imageUrl || null,
+            productUrl,
+            sku: item.barcode || item.elguideId || null,
+            inStock: item.stockCount > 0 || item.canAddToCart,
+            isHighMargin: marginInfo.isHighMargin,
+            marginReason: marginInfo.reason || null,
+            specs,
+          };
+        });
+        
+        await storage.upsertProducts(productsToInsert);
+        totalSynced += productsToInsert.length;
+        from += pageSize;
+        
+        console.log(`Synced ${totalSynced}/${totalCount} products`);
+        
+        if (from >= totalCount || rawProducts.length < pageSize) {
+          hasMore = false;
+        }
+        
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      const finalCount = await storage.getProductCount();
+      console.log(`Sync complete. Total products in database: ${finalCount}`);
+      
+      res.json({
+        success: true,
+        totalSynced,
+        totalInDatabase: finalCount,
+        message: `Synkroniserede ${totalSynced} produkter`,
+      });
+      
+    } catch (error: any) {
+      console.error("Sync error:", error.message);
+      res.status(500).json({
+        success: false,
+        error: "Fejl ved synkronisering: " + error.message,
+      });
+    }
+  });
+  
+  // Database status endpoint
+  app.get("/api/db/status", async (req, res) => {
+    try {
+      const count = await storage.getProductCount();
+      res.json({
+        productCount: count,
+        hasProducts: count > 0,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        error: "Database fejl: " + error.message,
+      });
+    }
+  });
+
   app.get("/api/search", async (req, res) => {
     try {
       const query = req.query.q as string;
+      const useDatabase = req.query.db === "true";
       
       if (!query || query.trim().length === 0) {
         return res.status(400).json({ 
@@ -293,6 +408,83 @@ export async function registerRoutes(
         });
       }
 
+      // Try database search first if db=true or if we have products in database
+      const dbProductCount = await storage.getProductCount();
+      if (useDatabase && dbProductCount > 0) {
+        console.log(`Searching database for: ${query}`);
+        const dbResults = await storage.searchProducts(query);
+        
+        if (dbResults.length > 0) {
+          // Convert DB products to response format with upgrade scoring
+          const allProducts = dbResults.map((item) => ({
+            id: item.id,
+            name: item.name,
+            brand: item.brand,
+            price: item.price,
+            originalPrice: item.originalPrice ?? undefined,
+            imageUrl: item.imageUrl ?? undefined,
+            productUrl: item.productUrl,
+            sku: item.sku ?? undefined,
+            inStock: item.inStock ?? true,
+            isHighMargin: item.isHighMargin ?? false,
+            marginReason: item.marginReason ?? undefined,
+            specs: item.specs ?? {},
+            isTopPick: false,
+            priceDifference: 0,
+            upgradeScore: 0,
+          }));
+          
+          let products = allProducts;
+          
+          if (allProducts.length > 1) {
+            const reference = allProducts[0];
+            const referencePrice = reference.price;
+            const referenceSpecs = reference.specs as ExtractedSpecs;
+            const maxPrice = referencePrice * 1.5;
+            
+            const scoredAlternatives = allProducts.slice(1).map((alt: any) => {
+              const priceDiff = alt.price - referencePrice;
+              const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
+                alt.specs,
+                referenceSpecs,
+                alt.isHighMargin,
+                alt.price,
+                referencePrice
+              );
+              
+              return {
+                ...alt,
+                priceDifference: priceDiff,
+                upgradeScore: score,
+                isValidUpgrade,
+                upgradeReason,
+              };
+            });
+            
+            const validUpgrades = scoredAlternatives
+              .filter((alt: any) => alt.isValidUpgrade && alt.price <= maxPrice)
+              .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
+              .slice(0, 8);
+            
+            const topPickIndex = findTopPick(validUpgrades);
+            if (topPickIndex >= 0) {
+              validUpgrades[topPickIndex].isTopPick = true;
+            }
+            
+            products = [reference, ...validUpgrades];
+          }
+          
+          console.log(`Found ${products.length} products in database for "${query}"`);
+          return res.json({
+            products,
+            totalCount: dbResults.length,
+            searchQuery: query,
+            source: "database",
+          });
+        }
+      }
+
+      // Fallback to Power.dk API
       const headers = {
         "User-Agent": getRandomUserAgent(),
         "Accept": "application/json",
