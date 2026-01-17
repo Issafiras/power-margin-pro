@@ -16,8 +16,14 @@ export type Product = z.infer<typeof productSchema>;
 
 export const productSpecsSchema = z.object({
   cpu: z.string().optional(),
+  cpuTier: z.number().optional(),
   gpu: z.string().optional(),
+  gpuTier: z.number().optional(),
   ram: z.string().optional(),
+  ramGB: z.number().optional(),
+  storage: z.string().optional(),
+  storageGB: z.number().optional(),
+  screenSize: z.number().optional(),
 });
 
 export type ProductSpecs = z.infer<typeof productSpecsSchema>;
@@ -28,6 +34,8 @@ export const productWithMarginSchema = productSchema.extend({
   specs: productSpecsSchema.optional(),
   isTopPick: z.boolean().default(false),
   priceDifference: z.number().optional(),
+  upgradeScore: z.number().optional(),
+  upgradeReason: z.string().optional(),
 });
 
 export type ProductWithMargin = z.infer<typeof productWithMarginSchema>;

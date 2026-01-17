@@ -15,8 +15,47 @@ function getRandomUserAgent(): string {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-function extractSpecs(productName: string) {
-  const specs: { cpu?: string; gpu?: string; ram?: string } = {};
+interface ExtractedSpecs {
+  cpu?: string;
+  cpuTier?: number;
+  gpu?: string;
+  gpuTier?: number;
+  ram?: string;
+  ramGB?: number;
+  storage?: string;
+  storageGB?: number;
+  screenSize?: number;
+}
+
+function getCpuTier(cpuString: string): number {
+  const cpu = cpuString.toLowerCase();
+  if (/intel\s+core\s+(?:ultra\s+)?i3/i.test(cpu)) return 3;
+  if (/intel\s+core\s+(?:ultra\s+)?i5/i.test(cpu)) return 5;
+  if (/intel\s+core\s+(?:ultra\s+)?i7/i.test(cpu)) return 7;
+  if (/intel\s+core\s+(?:ultra\s+)?i9/i.test(cpu)) return 9;
+  if (/amd\s+ryzen\s+3/i.test(cpu)) return 3;
+  if (/amd\s+ryzen\s+5/i.test(cpu)) return 5;
+  if (/amd\s+ryzen\s+7/i.test(cpu)) return 7;
+  if (/amd\s+ryzen\s+9/i.test(cpu)) return 9;
+  if (/apple\s+m4/i.test(cpu)) return 10;
+  if (/apple\s+m3/i.test(cpu)) return 9;
+  if (/apple\s+m2/i.test(cpu)) return 8;
+  if (/apple\s+m1/i.test(cpu)) return 7;
+  if (/celeron|pentium|athlon/i.test(cpu)) return 1;
+  return 0;
+}
+
+function getGpuTier(gpuString: string): number {
+  const gpu = gpuString.toLowerCase();
+  if (/rtx\s*40\d{2}/i.test(gpu)) return 7;
+  if (/rtx\s*30\d{2}/i.test(gpu)) return 5;
+  if (/gtx/i.test(gpu)) return 3;
+  if (/intel\s+(?:iris|uhd|arc)/i.test(gpu) || /radeon\s+graphics/i.test(gpu)) return 1;
+  return 0;
+}
+
+function extractSpecs(productName: string): ExtractedSpecs {
+  const specs: ExtractedSpecs = {};
   
   const cpuPatterns = [
     /Intel\s+Core\s+(?:Ultra\s+)?[i579][\s-]?(?:\d{4,5}[A-Z]*)/i,
@@ -33,6 +72,7 @@ function extractSpecs(productName: string) {
     const match = productName.match(pattern);
     if (match) {
       specs.cpu = match[0].trim();
+      specs.cpuTier = getCpuTier(specs.cpu);
       break;
     }
   }
@@ -50,24 +90,138 @@ function extractSpecs(productName: string) {
     const match = productName.match(pattern);
     if (match) {
       specs.gpu = match[0].trim();
+      specs.gpuTier = getGpuTier(specs.gpu);
       break;
     }
   }
   
-  const ramPatterns = [
-    /(\d{1,3})\s*GB\s*(?:DDR[45]|RAM|LPDDR[45x])/i,
-    /(\d{1,3})\s*GB/i,
-  ];
+  const parenthesisMatch = productName.match(/\((?:i[3579]|R[3579]|M[1234])?[\/\s]*(\d{1,2})[\/\s]*(\d{2,4})\s*(?:GB|TB)/i);
+  if (parenthesisMatch) {
+    const ramValue = parseInt(parenthesisMatch[1], 10);
+    if (ramValue >= 4 && ramValue <= 64) {
+      specs.ram = `${ramValue} GB`;
+      specs.ramGB = ramValue;
+    }
+    const storageValue = parseInt(parenthesisMatch[2], 10);
+    if (storageValue >= 64) {
+      specs.storage = `${storageValue} GB`;
+      specs.storageGB = storageValue;
+    }
+  }
   
-  for (const pattern of ramPatterns) {
-    const match = productName.match(pattern);
-    if (match) {
-      specs.ram = `${match[1]} GB`;
-      break;
+  if (!specs.ramGB) {
+    const ramPatterns = [
+      /(\d{1,2})\s*GB\s*(?:DDR[45]|RAM|LPDDR[45x])/i,
+      /[\/\s](\d{1,2})\s*GB[\/\s]/i,
+    ];
+    
+    for (const pattern of ramPatterns) {
+      const match = productName.match(pattern);
+      if (match) {
+        const ramValue = parseInt(match[1], 10);
+        if (ramValue >= 4 && ramValue <= 64) {
+          specs.ram = `${ramValue} GB`;
+          specs.ramGB = ramValue;
+          break;
+        }
+      }
+    }
+  }
+  
+  if (!specs.storageGB) {
+    const storagePatterns = [
+      /(\d+(?:\.\d+)?)\s*TB\s*(?:SSD|NVMe|HDD)?/i,
+      /(\d{3,4})\s*GB\s*(?:SSD|NVMe|HDD)?/i,
+    ];
+    
+    for (const pattern of storagePatterns) {
+      const match = productName.match(pattern);
+      if (match) {
+        const value = parseFloat(match[1]);
+        if (/TB/i.test(match[0])) {
+          specs.storage = `${value} TB`;
+          specs.storageGB = value * 1024;
+        } else if (value >= 64) {
+          specs.storage = `${value} GB`;
+          specs.storageGB = value;
+        }
+        break;
+      }
+    }
+  }
+  
+  const screenMatch = productName.match(/(\d{1,2}(?:\.\d)?)["\u2033-]?\s*(?:inch|tommer|"|'')?/i);
+  if (screenMatch) {
+    const size = parseFloat(screenMatch[1]);
+    if (size >= 10 && size <= 18) {
+      specs.screenSize = size;
     }
   }
   
   return specs;
+}
+
+function calculateUpgradeScore(
+  alternative: ExtractedSpecs,
+  reference: ExtractedSpecs,
+  isHighMargin: boolean,
+  alternativePrice: number,
+  referencePrice: number
+): { score: number; isValidUpgrade: boolean; upgradeReason?: string } {
+  const cpuDiff = (alternative.cpuTier || 0) - (reference.cpuTier || 0);
+  const ramDiff = (alternative.ramGB || 0) - (reference.ramGB || 0);
+  const storageDiff = (alternative.storageGB || 0) - (reference.storageGB || 0);
+  const gpuDiff = (alternative.gpuTier || 0) - (reference.gpuTier || 0);
+  
+  // Only count as major downgrade if we can actually compare the specs
+  const hasMajorDowngrade = 
+    (reference.cpuTier && alternative.cpuTier && cpuDiff < -2) ||
+    (reference.ramGB && alternative.ramGB && ramDiff < -8) ||
+    (reference.gpuTier && alternative.gpuTier && gpuDiff < -2);
+  
+  // Calculate base score - only count positive differences
+  let score = 0;
+  const reasons: string[] = [];
+  
+  if (cpuDiff > 0) {
+    score += cpuDiff * 10;
+    reasons.push("Bedre CPU");
+  }
+  if (ramDiff > 0) {
+    score += ramDiff * 2;
+    reasons.push(`+${ramDiff}GB RAM`);
+  }
+  if (storageDiff > 0) {
+    score += storageDiff * 0.01;
+    reasons.push("Mere lagerplads");
+  }
+  if (gpuDiff > 0) {
+    score += gpuDiff * 5;
+    reasons.push("Bedre grafikkort");
+  }
+  
+  // High margin products get a significant boost
+  if (isHighMargin) {
+    score += 25;
+    reasons.push("Høj avance");
+  }
+  
+  // Price proximity bonus (prefer alternatives within 30% of reference)
+  const priceRatio = alternativePrice / referencePrice;
+  if (priceRatio >= 0.8 && priceRatio <= 1.3) {
+    score += 10;
+  }
+  
+  // Valid if: has any upgrade OR is high margin, AND no major downgrades, AND within 50% price
+  const hasAnyUpgrade = cpuDiff > 0 || ramDiff > 0 || storageDiff > 0 || gpuDiff > 0;
+  const isWithinPriceRange = alternativePrice <= referencePrice * 1.5;
+  const isValidUpgrade = (hasAnyUpgrade || isHighMargin) && !hasMajorDowngrade && isWithinPriceRange;
+  
+  return { 
+    score, 
+    isValidUpgrade, 
+    upgradeReason: reasons.length > 0 ? reasons.join(", ") : undefined 
+  };
 }
 
 function isHighMarginProduct(brand: string, price: number): { isHighMargin: boolean; reason?: string } {
@@ -83,7 +237,7 @@ function isHighMarginProduct(brand: string, price: number): { isHighMargin: bool
   return { isHighMargin: false };
 }
 
-function findTopPick(products: any[], referencePrice: number): number {
+function findTopPick(products: any[]): number {
   let bestIndex = -1;
   let bestScore = -Infinity;
   
@@ -91,11 +245,9 @@ function findTopPick(products: any[], referencePrice: number): number {
     const product = products[i];
     if (!product.isHighMargin) continue;
     
-    const priceDiff = Math.abs(product.price - referencePrice);
-    const priceProximityScore = 10000 - priceDiff;
-    
-    if (priceProximityScore > bestScore) {
-      bestScore = priceProximityScore;
+    const score = product.upgradeScore || 0;
+    if (score > bestScore) {
+      bestScore = score;
       bestIndex = i;
     }
   }
@@ -185,7 +337,7 @@ export async function registerRoutes(
         }
       }
 
-      const products = rawProducts.map((item: any, index: number) => {
+      const allProducts = rawProducts.map((item: any, index: number) => {
         const name = item.title || "Ukendt produkt";
         const brand = item.manufacturerName || "Ukendt";
         const price = item.price || 0;
@@ -217,22 +369,48 @@ export async function registerRoutes(
           specs,
           isTopPick: false,
           priceDifference: 0,
+          upgradeScore: 0,
         };
       });
 
-      if (products.length > 1) {
-        const referencePrice = products[0].price;
+      let products = allProducts;
+
+      if (allProducts.length > 1) {
+        const reference = allProducts[0];
+        const referencePrice = reference.price;
+        const referenceSpecs = reference.specs;
+        const maxPrice = referencePrice * 1.5;
         
-        for (let i = 1; i < products.length; i++) {
-          products[i].priceDifference = products[i].price - referencePrice;
-        }
+        const scoredAlternatives = allProducts.slice(1).map((alt: any) => {
+          const priceDiff = alt.price - referencePrice;
+          const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
+            alt.specs,
+            referenceSpecs,
+            alt.isHighMargin,
+            alt.price,
+            referencePrice
+          );
+          
+          return {
+            ...alt,
+            priceDifference: priceDiff,
+            upgradeScore: score,
+            isValidUpgrade,
+            upgradeReason,
+          };
+        });
         
-        const alternatives = products.slice(1);
-        const topPickIndex = findTopPick(alternatives, referencePrice);
+        const validUpgrades = scoredAlternatives
+          .filter((alt: any) => alt.isValidUpgrade && alt.price <= maxPrice)
+          .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
+          .slice(0, 8);
         
+        const topPickIndex = findTopPick(validUpgrades);
         if (topPickIndex >= 0) {
-          products[topPickIndex + 1].isTopPick = true;
+          validUpgrades[topPickIndex].isTopPick = true;
         }
+        
+        products = [reference, ...validUpgrades];
       }
 
       const result = {

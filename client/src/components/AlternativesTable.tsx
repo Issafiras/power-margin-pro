@@ -168,7 +168,15 @@ export function AlternativesTable({ alternatives, referencePrice }: Alternatives
                         </div>
                       </div>
                       
-                      {product.specs && (product.specs.cpu || product.specs.gpu || product.specs.ram) && (
+                      {product.upgradeReason && (
+                        <div className="mt-2">
+                          <Badge variant="outline" className="text-xs text-primary border-primary/30 bg-primary/10">
+                            {product.upgradeReason}
+                          </Badge>
+                        </div>
+                      )}
+                      
+                      {product.specs && (product.specs.cpu || product.specs.gpu || product.specs.ram || product.specs.storage) && (
                         <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
                           {product.specs.cpu && (
                             <div className="flex items-center gap-1">
@@ -186,6 +194,11 @@ export function AlternativesTable({ alternatives, referencePrice }: Alternatives
                             <div className="flex items-center gap-1">
                               <MemoryStick className="h-3 w-3 text-primary" />
                               <span>{product.specs.ram}</span>
+                            </div>
+                          )}
+                          {product.specs.storage && (
+                            <div className="flex items-center gap-1">
+                              <span>{product.specs.storage}</span>
                             </div>
                           )}
                         </div>
