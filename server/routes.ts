@@ -730,9 +730,12 @@ export async function registerRoutes(
       let rawProducts = data?.products || [];
       const totalCount = data?.totalProductCount || rawProducts.length;
 
+      // Filter to only in-stock products (online availability)
+      rawProducts = rawProducts.filter((p: any) => p.stockCount > 0 || p.canAddToCart);
+
       // Guard: If no products found from API, return empty result
       if (rawProducts.length === 0) {
-        console.log(`No products found for query "${query}"`);
+        console.log(`No in-stock products found for query "${query}"`);
         return res.json({
           products: [],
           totalCount: 0,
@@ -860,7 +863,8 @@ export async function registerRoutes(
             const altProducts = altResponse.data?.products || [];
             const alternatives = altProducts
               .filter((p: any) => p.productId?.toString() !== reference.id)
-              .slice(0, 10);
+              .filter((p: any) => p.stockCount > 0 || p.canAddToCart)
+              .slice(0, 15);
             
             const mappedAlts = alternatives.map((item: any) => {
               const name = item.title || "Ukendt produkt";

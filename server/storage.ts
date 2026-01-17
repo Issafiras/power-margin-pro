@@ -1,7 +1,7 @@
 import { type User, type InsertUser, products, type InsertProduct, type DbProduct, type ProductSpecs } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, ilike, or, sql } from "drizzle-orm";
+import { and, eq, ilike, or, sql } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -120,16 +120,22 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(products)
       .where(
-        or(
-          ilike(products.name, searchPattern),
-          ilike(products.brand, searchPattern),
-          ilike(products.sku, searchPattern)
+        and(
+          eq(products.inStock, true),
+          or(
+            ilike(products.name, searchPattern),
+            ilike(products.brand, searchPattern),
+            ilike(products.sku, searchPattern)
+          )
         )
       );
   }
 
   async getAllProducts(): Promise<DbProduct[]> {
-    return await db.select().from(products);
+    return await db
+      .select()
+      .from(products)
+      .where(eq(products.inStock, true));
   }
 
   async getProductCount(): Promise<number> {

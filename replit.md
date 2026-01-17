@@ -52,6 +52,7 @@ The database stores synchronized laptop products via the "Synkroniser Database" 
 - **Dark Mode Only**: Enforces consistent branding with Power.dk's color scheme
 - **Spec Extraction**: Uses regex pattern matching on product names rather than structured API data
 - **In-Memory Storage**: User storage uses in-memory Map (MemStorage class) rather than database
+- **Stock Filtering**: Only shows products that are in stock online (stockCount > 0 or canAddToCart = true)
 
 ## External Dependencies
 
