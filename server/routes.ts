@@ -668,87 +668,99 @@ export async function registerRoutes(
       let rawProducts = data?.products || [];
       const totalCount = data?.totalProductCount || rawProducts.length;
 
-      // If we found only 1 product (SKU search), fetch more laptops as alternatives
-      if (rawProducts.length === 1) {
-        console.log("Only 1 product found, fetching alternatives from category...");
-        const categoryUrl = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=20&from=0`;
-        
-        try {
-          const altResponse = await axios.get(categoryUrl, {
-            headers,
-            timeout: 15000,
-          });
-          
-          const altProducts = altResponse.data?.products || [];
-          // Add alternatives (excluding the searched product)
-          const searchedProductId = rawProducts[0].productId?.toString();
-          const alternatives = altProducts.filter((p: any) => 
-            p.productId?.toString() !== searchedProductId
-          ).slice(0, 10);
-          
-          rawProducts = [...rawProducts, ...alternatives];
-          console.log(`Added ${alternatives.length} alternatives from category`);
-        } catch (altError) {
-          console.log("Could not fetch alternatives:", altError);
-        }
+      // Guard: If no products found from API, return empty result
+      if (rawProducts.length === 0) {
+        console.log(`No products found for query "${query}"`);
+        return res.json({
+          products: [],
+          totalCount: 0,
+          searchQuery: query,
+        });
       }
 
-      const allProducts = rawProducts.map((item: any, index: number) => {
-        const name = item.title || "Ukendt produkt";
-        const brand = item.manufacturerName || "Ukendt";
-        const price = item.price || 0;
-        const originalPrice = item.previousPrice;
-        const productId = item.productId?.toString() || `product-${index}`;
-        
-        let imageUrl = getImageUrl(item.productImage);
-        
-        let productUrl = item.url || "";
-        if (productUrl && !productUrl.startsWith("http")) {
-          productUrl = `https://www.power.dk${productUrl}`;
-        }
-
-        const marginInfo = isHighMarginProduct(brand, price);
-        const specs = extractSpecs(name);
-
-        return {
-          id: productId,
-          name,
-          brand,
-          price,
-          originalPrice: originalPrice || undefined,
-          imageUrl: imageUrl || undefined,
-          productUrl,
-          sku: item.barcode || item.elguideId || undefined,
-          inStock: item.stockCount > 0 || item.canAddToCart,
-          isHighMargin: marginInfo.isHighMargin,
-          marginReason: marginInfo.reason,
-          specs,
-          isTopPick: false,
-          priceDifference: 0,
-          upgradeScore: 0,
-        };
-      });
-
-      let products = allProducts;
-
-      if (allProducts.length > 1) {
-        const reference = allProducts[0];
+      // Map the main searched product from API
+      const mainProduct = rawProducts[0];
+      const mainName = mainProduct.title || "Ukendt produkt";
+      const mainBrand = mainProduct.manufacturerName || "Ukendt";
+      const mainPrice = mainProduct.price || 0;
+      const mainMarginInfo = isHighMarginProduct(mainBrand, mainPrice);
+      const mainSpecs = extractSpecs(mainName);
+      
+      let mainProductUrl = mainProduct.url || "";
+      if (mainProductUrl && !mainProductUrl.startsWith("http")) {
+        mainProductUrl = `https://www.power.dk${mainProductUrl}`;
+      }
+      
+      const reference = {
+        id: mainProduct.productId?.toString() || "product-0",
+        name: mainName,
+        brand: mainBrand,
+        price: mainPrice,
+        originalPrice: mainProduct.previousPrice || undefined,
+        imageUrl: getImageUrl(mainProduct.productImage) || undefined,
+        productUrl: mainProductUrl,
+        sku: mainProduct.barcode || mainProduct.elguideId || undefined,
+        inStock: mainProduct.stockCount > 0 || mainProduct.canAddToCart,
+        isHighMargin: mainMarginInfo.isHighMargin,
+        marginReason: mainMarginInfo.reason,
+        specs: mainSpecs,
+        isTopPick: false,
+        priceDifference: 0,
+        upgradeScore: 0,
+      };
+      
+      // Fetch alternatives from database if available
+      let products = [reference];
+      const dbAltCount = await storage.getProductCount();
+      
+      if (dbAltCount > 0) {
+        console.log("Fetching alternatives from database...");
+        const dbAlternatives = await storage.getAllProducts();
         const referencePrice = reference.price;
         const referenceSpecs = reference.specs;
         const maxPrice = referencePrice * 1.5;
         
-        const scoredAlternatives = allProducts.slice(1).map((alt: any) => {
-          const priceDiff = alt.price - referencePrice;
+        // Filter to products with complete specs and within price range
+        const validDbProducts = dbAlternatives.filter((p) => {
+          if (p.id === reference.id) return false;
+          if (p.price > maxPrice) return false;
+          
+          // Require complete specs for valid comparison
+          const specs = p.specs as ExtractedSpecs | null;
+          if (!specs) return false;
+          if (!specs.cpuTier || specs.cpuTier === 0) return false;
+          if (!specs.ramGB || specs.ramGB === 0) return false;
+          if (!specs.storageGB || specs.storageGB === 0) return false;
+          
+          return true;
+        });
+        
+        // Map DB products directly to response format and score them
+        const scoredAlternatives = validDbProducts.map((p) => {
+          const specs = (p.specs as ExtractedSpecs) || {};
+          const priceDiff = p.price - referencePrice;
           const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
-            alt.specs,
+            specs,
             referenceSpecs,
-            alt.isHighMargin,
-            alt.price,
+            p.isHighMargin ?? false,
+            p.price,
             referencePrice
           );
           
           return {
-            ...alt,
+            id: p.id,
+            name: p.name,
+            brand: p.brand,
+            price: p.price,
+            originalPrice: p.originalPrice ?? undefined,
+            imageUrl: p.imageUrl ?? undefined,
+            productUrl: p.productUrl,
+            sku: p.sku ?? undefined,
+            inStock: p.inStock ?? true,
+            isHighMargin: p.isHighMargin ?? false,
+            marginReason: p.marginReason ?? undefined,
+            specs,
+            isTopPick: false,
             priceDifference: priceDiff,
             upgradeScore: score,
             isValidUpgrade,
@@ -756,9 +768,10 @@ export async function registerRoutes(
           };
         });
         
+        // Sort by upgrade score and take top 8
         const validUpgrades = scoredAlternatives
-          .filter((alt: any) => alt.isValidUpgrade && alt.price <= maxPrice)
-          .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
+          .filter((alt) => alt.isValidUpgrade)
+          .sort((a, b) => b.upgradeScore - a.upgradeScore)
           .slice(0, 8);
         
         const topPickIndex = findTopPick(validUpgrades);
@@ -767,6 +780,71 @@ export async function registerRoutes(
         }
         
         products = [reference, ...validUpgrades];
+        console.log(`Found ${validUpgrades.length} valid alternatives from database`);
+      } else {
+        // Fallback to Power.dk category if database is empty
+        console.log("Database empty, fetching alternatives from Power.dk...");
+        if (rawProducts.length === 1) {
+          const categoryUrl = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=20&from=0`;
+          
+          try {
+            const altResponse = await axios.get(categoryUrl, { headers, timeout: 15000 });
+            const altProducts = altResponse.data?.products || [];
+            const alternatives = altProducts
+              .filter((p: any) => p.productId?.toString() !== reference.id)
+              .slice(0, 10);
+            
+            const mappedAlts = alternatives.map((item: any) => {
+              const name = item.title || "Ukendt produkt";
+              const brand = item.manufacturerName || "Ukendt";
+              const price = item.price || 0;
+              const marginInfo = isHighMarginProduct(brand, price);
+              const specs = extractSpecs(name);
+              let productUrl = item.url || "";
+              if (productUrl && !productUrl.startsWith("http")) {
+                productUrl = `https://www.power.dk${productUrl}`;
+              }
+              
+              const priceDiff = price - reference.price;
+              const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
+                specs, reference.specs, marginInfo.isHighMargin, price, reference.price
+              );
+              
+              return {
+                id: item.productId?.toString() || "",
+                name, brand, price,
+                originalPrice: item.previousPrice || undefined,
+                imageUrl: getImageUrl(item.productImage) || undefined,
+                productUrl,
+                sku: item.barcode || item.elguideId || undefined,
+                inStock: item.stockCount > 0 || item.canAddToCart,
+                isHighMargin: marginInfo.isHighMargin,
+                marginReason: marginInfo.reason,
+                specs,
+                isTopPick: false,
+                priceDifference: priceDiff,
+                upgradeScore: score,
+                isValidUpgrade,
+                upgradeReason,
+              };
+            });
+            
+            const validUpgrades = mappedAlts
+              .filter((alt: any) => alt.isValidUpgrade)
+              .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
+              .slice(0, 8);
+            
+            const topPickIndex = findTopPick(validUpgrades);
+            if (topPickIndex >= 0) {
+              validUpgrades[topPickIndex].isTopPick = true;
+            }
+            
+            products = [reference, ...validUpgrades];
+            console.log(`Added ${validUpgrades.length} alternatives from Power.dk category`);
+          } catch (altError) {
+            console.log("Could not fetch alternatives:", altError);
+          }
+        }
       }
 
       const result = {
