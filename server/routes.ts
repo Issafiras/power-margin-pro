@@ -913,10 +913,13 @@ export async function registerRoutes(
         // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
         const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
         
-        // Filter to products with RAM+Storage specs (CPU optional) and within price range
+        // Filter to HIGH MARGIN products with RAM+Storage specs (CPU optional) and within price range
         const validDbProducts = dbAlternatives.filter((p) => {
           if (p.id === reference.id) return false;
           if (p.price > maxPrice) return false;
+          
+          // ONLY show high margin alternatives
+          if (!p.isHighMargin) return false;
           
           // Require at least RAM+Storage for valid comparison (CPU optional)
           const specs = p.specs as ExtractedSpecs | null;
@@ -1025,7 +1028,7 @@ export async function registerRoutes(
             });
             
             const validUpgrades = mappedAlts
-              .filter((alt: any) => alt.isValidUpgrade)
+              .filter((alt: any) => alt.isValidUpgrade && alt.isHighMargin)
               .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
               .slice(0, 8);
             
