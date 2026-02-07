@@ -1,28 +1,42 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { SearchBar } from "@/components/SearchBar";
-import { ProductCard } from "@/components/ProductCard";
-import { AlternativesTable } from "@/components/AlternativesTable";
+import { Header } from "@/components/dashboard/Header";
+import { StatsRow } from "@/components/dashboard/StatsRow";
+import { RecommendationCard } from "@/components/dashboard/RecommendationCard";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingState } from "@/components/LoadingState";
-import { Button } from "@/components/ui/button";
+import { ProductCard } from "@/components/ProductCard";
+import { AlternativesTable } from "@/components/AlternativesTable";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { 
-  Zap, FileText, FileSpreadsheet, Loader2, RefreshCw, 
-  Database, CheckCircle2, TrendingUp, Package, Sparkles,
-  ArrowRight, Clock
-} from "lucide-react";
+import { Sparkles } from "lucide-react";
 import type { SearchResponse } from "@shared/schema";
+import { MarginChart } from "@/components/dashboard/MarginChart";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { motion } from "framer-motion";
 
-interface DbStatus {
-  productCount: number;
-  hasProducts: boolean;
-  highMarginCount?: number;
-  lastSync?: string;
-}
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100
+    }
+  }
+};
 
 interface SyncResult {
   success: boolean;
@@ -37,18 +51,7 @@ export default function Dashboard() {
   const [hasSearched, setHasSearched] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [excelLoading, setExcelLoading] = useState(false);
-  const [showComparison, setShowComparison] = useState(false);
   const { toast } = useToast();
-
-  const { data: dbStatus, refetch: refetchDbStatus } = useQuery<DbStatus>({
-    queryKey: ['/api/db/status'],
-    queryFn: async () => {
-      const res = await fetch('/api/db/status');
-      if (!res.ok) throw new Error('Failed to get DB status');
-      return res.json();
-    },
-    refetchInterval: 60000,
-  });
 
   const syncMutation = useMutation<SyncResult>({
     mutationFn: async () => {
@@ -57,7 +60,7 @@ export default function Dashboard() {
       return res.json();
     },
     onSuccess: (result) => {
-      refetchDbStatus();
+      queryClient.invalidateQueries({ queryKey: ['/api/db/status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/search'] });
       toast({
         title: "Synkronisering fuldført",
@@ -73,7 +76,13 @@ export default function Dashboard() {
     },
   });
 
-  const { data, isLoading, error, refetch } = useQuery<SearchResponse>({
+  // Check if DB has products to determine search mode
+  const { data: dbStatus } = useQuery<any>({
+    queryKey: ['/api/db/status'],
+    staleTime: 60000
+  });
+
+  const { data, isLoading, error } = useQuery<SearchResponse>({
     queryKey: ['/api/search', searchQuery, dbStatus?.hasProducts],
     queryFn: async () => {
       const useDb = dbStatus?.hasProducts ? 'true' : 'false';
@@ -89,7 +98,6 @@ export default function Dashboard() {
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setHasSearched(true);
-    setShowComparison(false);
   };
 
   const handleSync = () => {
@@ -150,309 +158,149 @@ export default function Dashboard() {
     }
   };
 
+  const [selectedAlternativeId, setSelectedAlternativeId] = useState<string | null>(null);
+
   const mainProduct = data?.products?.[0];
   const alternatives = data?.products?.slice(1) || [];
-  const topPick = alternatives.find(a => a.isTopPick);
+
+  // Default to top pick if nothing selected
+  const topPick = alternatives.find(a => a.isTopPick) || alternatives[0];
+
+  // Current selection logic
+  const selectedAlternative = selectedAlternativeId
+    ? alternatives.find(a => a.id === selectedAlternativeId)
+    : topPick;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="hero-gradient fixed inset-0 pointer-events-none" />
-      
-      <header className="sticky top-0 z-[9999] glass-strong border-b border-white/5">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between gap-4 mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary via-primary to-primary/60 flex items-center justify-center shadow-xl shadow-primary/25 animate-float">
-                <Zap className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight">
-                  <span className="text-gradient">Power</span> Margin Pro
-                </h1>
-                <p className="text-[11px] text-muted-foreground/70 tracking-wide">Optimizer til høj-avance produkter</p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-background relative overflow-hidden font-sans">
+      {/* Animated mesh gradient background */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-950/20 via-background to-amber-950/15" />
+        <div className="absolute top-0 left-1/4 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-amber-500/5 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+      </div>
 
-            <div className="flex items-center gap-2">
-              {data && data.products.length > 0 && (
-                <div className="flex items-center gap-1.5 mr-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleExportPdf}
-                    disabled={pdfLoading}
-                    data-testid="button-export-pdf"
-                    className="h-8 w-8"
-                  >
-                    {pdfLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={handleExportExcel}
-                    disabled={excelLoading}
-                    data-testid="button-export-excel"
-                    className="h-8 w-8"
-                  >
-                    {excelLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
-                  </Button>
-                </div>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSync}
-                disabled={syncMutation.isPending}
-                data-testid="button-sync"
-                className="gap-2 h-8"
-              >
-                {syncMutation.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-                <span className="hidden sm:inline text-xs">
-                  {syncMutation.isPending ? "Synkroniserer..." : "Synkroniser"}
-                </span>
-              </Button>
-            </div>
-          </div>
+      <Header
+        data={data}
+        isLoading={isLoading}
+        pdfLoading={pdfLoading}
+        excelLoading={excelLoading}
+        isSyncing={syncMutation.isPending}
+        onSearch={handleSearch}
+        onSync={handleSync}
+        onExportPdf={handleExportPdf}
+        onExportExcel={handleExportExcel}
+      />
 
-          <div className="grid grid-cols-3 gap-3 mb-5 animate-stagger">
-            <div className="stat-card rounded-xl p-3 flex items-center gap-3 premium-card">
-              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Package className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Produkter</p>
-                <p className="text-lg font-bold text-foreground counter-value">{dbStatus?.productCount || 0}</p>
-              </div>
-            </div>
-            <div className="stat-card rounded-xl p-3 flex items-center gap-3 premium-card">
-              <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center">
-                <Sparkles className="h-4 w-4 text-primary" />
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Høj Avance</p>
-                <p className="text-lg font-bold text-primary counter-value">{dbStatus?.highMarginCount || "—"}</p>
-              </div>
-            </div>
-            <div className="stat-card rounded-xl p-3 flex items-center gap-3 premium-card">
-              <div className="w-9 h-9 rounded-xl bg-green-500/10 flex items-center justify-center">
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-              </div>
-              <div>
-                <p className="text-[10px] text-muted-foreground/70 uppercase tracking-wider">Status</p>
-                <p className="text-sm font-semibold text-green-500">
-                  {dbStatus?.hasProducts ? "Klar" : "Synkroniser"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <SearchBar onSearch={handleSearch} isLoading={isLoading} />
+      <main className="container mx-auto px-6 py-8 relative z-10">
+        <div className="mb-8">
+          <StatsRow />
         </div>
-      </header>
 
-      <main className="container mx-auto px-4 py-6">
         {!hasSearched && <EmptyState type="initial" />}
-        
+
         {hasSearched && isLoading && <LoadingState />}
-        
+
         {hasSearched && error && (
-          <EmptyState 
-            type="error" 
-            message={error instanceof Error ? error.message : "Der opstod en fejl."} 
+          <EmptyState
+            type="error"
+            message={error instanceof Error ? error.message : "Der opstod en fejl."}
           />
         )}
-        
+
         {hasSearched && !isLoading && !error && data && data.products.length === 0 && (
-          <EmptyState 
-            type="no-results" 
-            message={`Ingen produkter fundet for "${searchQuery}".`} 
+          <EmptyState
+            type="no-results"
+            message={`Ingen produkter fundet for "${searchQuery}".`}
           />
         )}
-        
+
         {hasSearched && !isLoading && !error && data && data.products.length > 0 && (
-          <>
-            {mainProduct && topPick && (
-              <Card className="mb-6 p-4 glass-card border-primary/20 animate-scale-in">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div className="flex items-center gap-4">
-                    <Badge className="badge-premium gap-1.5">
-                      <TrendingUp className="h-3 w-3" />
-                      Hurtig Anbefaling
-                    </Badge>
-                    <p className="text-sm text-muted-foreground">
-                      Skift fra <span className="text-foreground font-medium">{mainProduct.brand}</span> til{" "}
-                      <span className="text-primary font-semibold">{topPick.brand} {topPick.name.slice(0, 30)}...</span>
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Merpris</p>
-                      <p className={`text-sm font-bold ${(topPick.priceDifference || 0) > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                        {(topPick.priceDifference || 0) > 0 ? '+' : ''}{topPick.priceDifference?.toLocaleString('da-DK')} kr
-                      </p>
-                    </div>
-                    <Button 
-                      size="sm" 
-                      className="gap-2"
-                      onClick={() => setShowComparison(!showComparison)}
-                    >
-                      {showComparison ? 'Skjul' : 'Sammenlign'}
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-                
-                {showComparison && (
-                  <div className="mt-4 pt-4 border-t border-white/5 animate-slide-up">
-                    <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center mb-4">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-widest text-center">Kundens Valg</p>
-                      <div className="w-8" />
-                      <p className="text-[10px] text-primary uppercase tracking-widest text-center flex items-center justify-center gap-1.5">
-                        <Sparkles className="h-3 w-3" />
-                        Anbefalet
-                      </p>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                        <div className="p-2 rounded-lg bg-muted/20 text-center">
-                          <p className="text-xs text-muted-foreground">Pris</p>
-                          <p className="text-lg font-bold">{mainProduct.price.toLocaleString('da-DK')} kr</p>
-                        </div>
-                        <div className="flex items-center justify-center w-8">
-                          <ArrowRight className={`h-4 w-4 ${(topPick.priceDifference || 0) > 0 ? 'text-red-400' : 'text-green-400'}`} />
-                        </div>
-                        <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-center">
-                          <p className="text-xs text-muted-foreground">Pris</p>
-                          <p className="text-lg font-bold text-primary">{topPick.price.toLocaleString('da-DK')} kr</p>
-                          <p className={`text-[10px] font-semibold ${(topPick.priceDifference || 0) > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                            {(topPick.priceDifference || 0) > 0 ? '+' : ''}{topPick.priceDifference?.toLocaleString('da-DK')} kr
-                          </p>
-                        </div>
-                      </div>
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="space-y-8"
+          >
+            <motion.div variants={itemVariants}>
+              {mainProduct && selectedAlternative && (
+                <RecommendationCard mainProduct={mainProduct} topPick={selectedAlternative} />
+              )}
+            </motion.div>
 
-                      {(mainProduct.specs?.ram || topPick.specs?.ram) && (
-                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.ramGB || 0) > (mainProduct.specs?.ramGB || 0) ? 'bg-muted/20' : 'bg-green-500/10 border border-green-500/20'}`}>
-                            <p className="text-xs text-muted-foreground">RAM</p>
-                            <p className="text-sm font-semibold">{mainProduct.specs?.ram || '—'}</p>
-                          </div>
-                          <div className="flex items-center justify-center w-8">
-                            {(topPick.specs?.ramGB || 0) > (mainProduct.specs?.ramGB || 0) ? (
-                              <TrendingUp className="h-4 w-4 text-green-400" />
-                            ) : (topPick.specs?.ramGB || 0) < (mainProduct.specs?.ramGB || 0) ? (
-                              <TrendingUp className="h-4 w-4 text-red-400 rotate-180" />
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">=</span>
-                            )}
-                          </div>
-                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.ramGB || 0) > (mainProduct.specs?.ramGB || 0) ? 'bg-green-500/10 border border-green-500/20' : 'bg-muted/20'}`}>
-                            <p className="text-xs text-muted-foreground">RAM</p>
-                            <p className="text-sm font-semibold">{topPick.specs?.ram || '—'}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {(mainProduct.specs?.cpu || topPick.specs?.cpu) && (
-                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.cpuTier || 0) > (mainProduct.specs?.cpuTier || 0) ? 'bg-muted/20' : 'bg-green-500/10 border border-green-500/20'}`}>
-                            <p className="text-xs text-muted-foreground">CPU</p>
-                            <p className="text-xs font-medium line-clamp-1">{mainProduct.specs?.cpu || '—'}</p>
-                          </div>
-                          <div className="flex items-center justify-center w-8">
-                            {(topPick.specs?.cpuTier || 0) > (mainProduct.specs?.cpuTier || 0) ? (
-                              <TrendingUp className="h-4 w-4 text-green-400" />
-                            ) : (topPick.specs?.cpuTier || 0) < (mainProduct.specs?.cpuTier || 0) ? (
-                              <TrendingUp className="h-4 w-4 text-red-400 rotate-180" />
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">=</span>
-                            )}
-                          </div>
-                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.cpuTier || 0) > (mainProduct.specs?.cpuTier || 0) ? 'bg-green-500/10 border border-green-500/20' : 'bg-muted/20'}`}>
-                            <p className="text-xs text-muted-foreground">CPU</p>
-                            <p className="text-xs font-medium line-clamp-1">{topPick.specs?.cpu || '—'}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {(mainProduct.specs?.storage || topPick.specs?.storage) && (
-                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
-                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.storageGB || 0) > (mainProduct.specs?.storageGB || 0) ? 'bg-muted/20' : 'bg-green-500/10 border border-green-500/20'}`}>
-                            <p className="text-xs text-muted-foreground">Lager</p>
-                            <p className="text-sm font-semibold">{mainProduct.specs?.storage || '—'}</p>
-                          </div>
-                          <div className="flex items-center justify-center w-8">
-                            {(topPick.specs?.storageGB || 0) > (mainProduct.specs?.storageGB || 0) ? (
-                              <TrendingUp className="h-4 w-4 text-green-400" />
-                            ) : (topPick.specs?.storageGB || 0) < (mainProduct.specs?.storageGB || 0) ? (
-                              <TrendingUp className="h-4 w-4 text-red-400 rotate-180" />
-                            ) : (
-                              <span className="text-[10px] text-muted-foreground">=</span>
-                            )}
-                          </div>
-                          <div className={`p-2 rounded-lg text-center ${(topPick.specs?.storageGB || 0) > (mainProduct.specs?.storageGB || 0) ? 'bg-green-500/10 border border-green-500/20' : 'bg-muted/20'}`}>
-                            <p className="text-xs text-muted-foreground">Lager</p>
-                            <p className="text-sm font-semibold">{topPick.specs?.storage || '—'}</p>
-                          </div>
-                        </div>
-                      )}
-
-                      {topPick.upgradeReason && (
-                        <div className="pt-2 text-center">
-                          <Badge className="badge-premium text-xs gap-1.5">
-                            <Sparkles className="h-3 w-3" />
-                            {topPick.upgradeReason}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </Card>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-1">
-                <div className="sticky top-[280px]">
-                  <div className="mb-3">
-                    <h2 className="text-[10px] font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left Column (Sticky) */}
+              <motion.div variants={itemVariants} className="lg:col-span-1">
+                <div className="sticky top-[280px] space-y-6">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 pb-2 border-b border-white/5">
                       <span className="w-6 h-px bg-gradient-to-r from-primary to-transparent" />
-                      Kundens Valg
-                    </h2>
+                      <h2 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em]">
+                        Kundens Valg
+                      </h2>
+                    </div>
+                    {mainProduct && <ProductCard product={mainProduct} variant="main" />}
                   </div>
-                  {mainProduct && <ProductCard product={mainProduct} variant="main" />}
-                </div>
-              </div>
 
-              <div className="lg:col-span-2">
-                <div className="mb-3 flex items-center justify-between gap-4">
-                  <h2 className="text-[10px] font-semibold text-primary uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-6 h-px bg-gradient-to-r from-primary to-transparent" />
-                    Høj-Avance Alternativer
-                  </h2>
-                  <Badge variant="outline" className="text-[10px] gap-1">
-                    <Sparkles className="h-2.5 w-2.5" />
-                    {alternatives.length} fundet
-                  </Badge>
+                  {/* New Chart Component */}
+                  {mainProduct && alternatives.length > 0 && (
+                    <MarginChart mainProduct={mainProduct} alternatives={alternatives} />
+                  )}
                 </div>
-                <AlternativesTable 
-                  alternatives={alternatives} 
-                  referencePrice={mainProduct?.price || 0} 
-                />
-              </div>
+              </motion.div>
+
+              {/* Right Column (Scrollable) */}
+              <motion.div variants={itemVariants} className="lg:col-span-2">
+                <Tabs defaultValue="alternatives" className="h-full flex flex-col">
+                  <div className="flex items-center justify-between gap-4 mb-4 pb-2 border-b border-white/5">
+                    <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 h-px bg-gradient-to-r from-primary to-transparent" />
+                        <h2 className="text-[10px] font-bold text-primary uppercase tracking-[0.2em]">
+                          Alternativer
+                        </h2>
+                      </div>
+                      <TabsList className="h-7 bg-white/5 border border-white/10">
+                        <TabsTrigger value="alternatives" className="text-[10px] px-3 h-5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                          Liste
+                        </TabsTrigger>
+                        <TabsTrigger value="specs" className="text-[10px] px-3 h-5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
+                          Specs
+                        </TabsTrigger>
+                      </TabsList>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] gap-1.5 px-2.5 py-0.5 border-white/10 bg-white/5 backdrop-blur-sm">
+                      <Sparkles className="h-3 w-3 text-amber-400" />
+                      {alternatives.length} fundet
+                    </Badge>
+                  </div>
+
+                  <TabsContent value="alternatives" className="h-full mt-0">
+                    <AlternativesTable
+                      alternatives={alternatives}
+                      referencePrice={mainProduct?.price || 0}
+                      selectedId={selectedAlternative?.id}
+                      onSelect={(id) => setSelectedAlternativeId(id)}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="specs" className="h-full mt-0">
+                    {/* Placeholder for future detailed spec comparison view */}
+                    <div className="h-40 glass flex items-center justify-center text-muted-foreground text-sm">
+                      Detaljeret specifikationsvisning kommer snart
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </motion.div>
             </div>
-          </>
+          </motion.div>
         )}
       </main>
 
-      <footer className="border-t border-white/5 mt-auto glass">
-        <div className="container mx-auto px-4 py-4">
-          <p className="text-[10px] text-center text-muted-foreground/40 tracking-wide">
-            Power Margin Optimizer Pro v2.0 — Designet til at maksimere avance
+      <footer className="border-t border-white/5 mt-auto glass-strong py-6">
+        <div className="container mx-auto px-6">
+          <p className="text-[10px] text-center text-muted-foreground/40 tracking-widest uppercase font-medium">
+            Power Salgsassistent Pro v2.0 — Din hjælp i hverdagen
           </p>
         </div>
       </footer>

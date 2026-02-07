@@ -6,11 +6,14 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
+import Comparison from "@/pages/Comparison";
+import Background3D from "@/components/Background3D";
 
 function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/compare" component={Comparison} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -21,6 +24,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <TooltipProvider>
+          <Background3D />
           <Toaster />
           <Router />
         </TooltipProvider>

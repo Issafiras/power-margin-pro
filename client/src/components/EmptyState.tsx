@@ -1,4 +1,5 @@
 import { Search, Laptop, TrendingUp, Sparkles, AlertCircle } from "lucide-react";
+import { motion } from "framer-motion";
 
 interface EmptyStateProps {
   type: "initial" | "no-results" | "error";
@@ -18,34 +19,27 @@ export function EmptyState({ type, message }: EmptyStateProps) {
           </div>
           <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 w-20 h-1 rounded-full bg-primary/20 blur-md" />
         </div>
-        <h2 className="text-3xl font-bold mb-4 text-foreground tracking-tight" data-testid="text-empty-state-heading">
-          Find <span className="text-gradient">avancestærke</span> produkter
-        </h2>
-        <p className="text-muted-foreground/80 max-w-md mb-10 text-lg">
-          Søg efter et produkt for at se alternativer med bedre avance
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-left max-w-lg w-full">
-          <div className="flex items-start gap-4 p-6 rounded-2xl glass-card transition-all duration-300 group" data-testid="card-instruction-search">
-            <div className="w-12 h-12 rounded-xl icon-container flex items-center justify-center flex-shrink-0">
-              <Search className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-base mb-1.5" data-testid="text-instruction-search-title">Søg produkt</h3>
-              <p className="text-sm text-muted-foreground/70 leading-relaxed" data-testid="text-instruction-search-desc">
-                Indtast SKU eller modelnavn
-              </p>
-            </div>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="max-w-md space-y-2 mt-4"
+        >
+          <h2 className="text-xl font-bold tracking-tight">
+            Find <span className="text-gradient">populære</span> produkter
+          </h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Søg efter et produkt for at se bedre alternativer og anbefalinger fra Power Salgsassistent.
+          </p>
+        </motion.div>
+
+        <div className="mt-8 grid grid-cols-2 gap-4 w-full max-w-sm">
+          <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-center">
+            <Search className="h-5 w-5 mx-auto mb-2 text-primary" />
+            <p className="text-[10px] text-muted-foreground font-medium">Søg Produkt</p>
           </div>
-          <div className="flex items-start gap-4 p-6 rounded-2xl glass-card transition-all duration-300 group" style={{ animationDelay: "100ms" }} data-testid="card-instruction-alternatives">
-            <div className="w-12 h-12 rounded-xl icon-container flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-base mb-1.5" data-testid="text-instruction-alternatives-title">Se alternativer</h3>
-              <p className="text-sm text-muted-foreground/70 leading-relaxed" data-testid="text-instruction-alternatives-desc">
-                Sammenlign med høj-avance produkter
-              </p>
-            </div>
+          <div className="p-3 rounded-xl bg-white/5 border border-white/5 text-center">
+            <Sparkles className="h-5 w-5 mx-auto mb-2 text-primary" />
+            <p className="text-[10px] text-muted-foreground font-medium">Se Anbefalinger</p>
           </div>
         </div>
       </div>

@@ -56,7 +56,7 @@ export const searchResponseSchema = z.object({
 export type SearchResponse = z.infer<typeof searchResponseSchema>;
 
 // Drizzle schema for PostgreSQL products table
-export const products = pgTable("products", {
+export const products = pgTable("power_products", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   brand: text("brand").notNull(),
@@ -76,10 +76,12 @@ export const insertProductSchema = createInsertSchema(products).omit({ updatedAt
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 export type DbProduct = typeof products.$inferSelect;
 
-export const users = {} as any;
-export const insertUserSchema = z.object({
-  username: z.string(),
-  password: z.string(),
-});
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = { id: string; username: string; password: string };
+// User types - used by storage.ts for in-memory user management
+// TODO: Implement proper database schema when authentication is needed
+export type InsertUser = {
+  username: string;
+  password: string;
+};
+export type User = InsertUser & { id: string };
+
+

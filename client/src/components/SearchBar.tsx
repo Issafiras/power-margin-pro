@@ -1,7 +1,8 @@
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, Sparkles, Laptop } from "lucide-react";
+import { Search, Loader2, Sparkles, Laptop, Command, X } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface Suggestion {
   id: string;
@@ -26,6 +27,18 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // Keyboard shortcut to focus search
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
 
   useEffect(() => {
     if (debounceRef.current) {
@@ -62,10 +75,11 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
     };
   }, [query]);
 
+  // Click outside to close
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
-        suggestionsRef.current && 
+        suggestionsRef.current &&
         !suggestionsRef.current.contains(e.target as Node) &&
         inputRef.current &&
         !inputRef.current.contains(e.target as Node)
@@ -91,6 +105,13 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
     onSearch(suggestion.name);
   };
 
+  const clearSearch = () => {
+    setQuery("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+    inputRef.current?.focus();
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (!showSuggestions || suggestions.length === 0) return;
 
@@ -105,29 +126,37 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
       handleSelectSuggestion(suggestions[selectedIndex]);
     } else if (e.key === "Escape") {
       setShowSuggestions(false);
+      inputRef.current?.blur();
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full relative">
-      <div className={`search-glow rounded-2xl p-1.5 transition-all duration-500 ${
-        isFocused ? "scale-[1.01]" : ""
-      }`}>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 z-10">
+    <div className="w-full relative max-w-4xl mx-auto">
+      <form onSubmit={handleSubmit} className="relative z-50">
+        <motion.div
+          className={`relative rounded-2xl overflow-hidden transition-shadow duration-300 ${isFocused
+              ? "shadow-[0_0_40px_-5px_rgba(249,115,22,0.3)] ring-1 ring-primary/50"
+              : "shadow-2xl shadow-black/20 border border-white/5"
+            }`}
+          initial={false}
+          animate={isFocused ? { scale: 1.02 } : { scale: 1 }}
+        >
+          {/* Glass background for input */}
+          <div className="absolute inset-0 bg-[#0f1219]/90 backdrop-blur-xl" />
+
+          <div className="relative flex items-center h-14 sm:h-16 px-4 sm:px-6">
+            <div className="flex-shrink-0 mr-4 text-muted-foreground">
               {isLoadingSuggestions ? (
-                <Loader2 className="h-5 w-5 text-primary/60 animate-spin" />
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
               ) : (
-                <Search className={`h-5 w-5 transition-colors duration-300 ${
-                  isFocused ? "text-primary" : "text-primary/60"
-                }`} />
+                <Search className={`h-5 w-5 transition-colors ${isFocused ? "text-primary" : ""}`} />
               )}
             </div>
+
             <Input
               ref={inputRef}
-              type="search"
-              placeholder="Søg efter SKU eller modelnavn..."
+              type="text"
+              placeholder="Søg efter SKU, model (f.eks. 'Zenbook') eller brand..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onFocus={() => {
@@ -136,92 +165,102 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
               }}
               onBlur={() => setIsFocused(false)}
               onKeyDown={handleKeyDown}
-              className="pl-12 pr-4 h-12 text-base bg-transparent border-0 focus-visible:ring-0 focus-visible:ring-offset-0 placeholder:text-muted-foreground/50"
+              className="flex-1 h-full bg-transparent border-none text-lg text-foreground placeholder:text-muted-foreground/40 focus-visible:ring-0 p-0"
               disabled={isLoading}
               autoComplete="off"
-              data-testid="input-search"
             />
-          </div>
-          <Button 
-            type="submit" 
-            disabled={isLoading || !query.trim()}
-            size="lg"
-            className="h-12 px-6 font-medium gap-2 badge-premium border-0"
-            data-testid="button-search"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Søger...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                Find Alternativer
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
 
-      {showSuggestions && suggestions.length > 0 && (
-        <div 
-          ref={suggestionsRef}
-          className="absolute left-0 right-0 top-full mt-2 z-50 glass-strong rounded-xl border border-white/10 shadow-2xl overflow-hidden animate-slide-up"
-          data-testid="dropdown-suggestions"
-        >
-          <div className="p-1">
-            {suggestions.map((suggestion, index) => (
-              <button
-                key={suggestion.id}
+            {query && (
+              <Button
                 type="button"
-                onClick={() => handleSelectSuggestion(suggestion)}
-                onMouseEnter={() => setSelectedIndex(index)}
-                className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg text-left transition-all ${
-                  selectedIndex === index 
-                    ? "bg-primary/10 border border-primary/20" 
-                    : "hover:bg-white/5"
-                }`}
-                data-testid={`suggestion-item-${index}`}
+                variant="ghost"
+                size="icon"
+                onClick={clearSearch}
+                className="h-8 w-8 text-muted-foreground hover:text-foreground mr-2"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <Laptop className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-sm font-medium truncate">{suggestion.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 ml-6">
-                    <span className="text-xs text-muted-foreground">{suggestion.brand}</span>
-                    {suggestion.isHighMargin && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-primary/20 text-primary">
-                        <Sparkles className="h-2.5 w-2.5" />
-                        Høj Avance
-                      </span>
-                    )}
-                  </div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold">{suggestion.price.toLocaleString('da-DK')} kr</p>
-                </div>
-              </button>
-            ))}
-          </div>
-          <div className="px-3 py-2 border-t border-white/5 bg-muted/20">
-            <p className="text-[10px] text-muted-foreground text-center">
-              Tryk Enter for at søge · ↑↓ for at navigere
-            </p>
-          </div>
-        </div>
-      )}
+                <X className="h-4 w-4" />
+              </Button>
+            )}
 
-      <div className="flex items-center justify-center gap-3 mt-4 text-xs flex-wrap">
-        <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20" data-testid="chip-category">
-          <Laptop className="h-3.5 w-3.5 text-primary" />
-          <span className="text-primary font-medium" data-testid="text-category-label">Bærbar PC</span>
-        </div>
-        <span className="text-muted-foreground/40">|</span>
-        <span className="text-muted-foreground/60" data-testid="text-optimization-label">Optimeret til avance</span>
-        <span className="status-dot" data-testid="indicator-status" />
-      </div>
-    </form>
+            <div className="hidden sm:flex items-center gap-2">
+              {!query && (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 border border-white/5 text-[10px] uppercase font-bold text-muted-foreground/60 tracking-wider">
+                  <span className="text-xs">⌘</span>
+                  <span>K</span>
+                </div>
+              )}
+              <Button
+                type="submit"
+                disabled={isLoading || !query.trim()}
+                className="h-9 px-4 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-lg text-sm shadow-lg shadow-orange-500/20"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                Find
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+      </form>
+
+      {/* Dropdown Suggestions */}
+      <AnimatePresence>
+        {showSuggestions && suggestions.length > 0 && (
+          <motion.div
+            ref={suggestionsRef}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+            className="absolute left-0 right-0 top-full mt-2 z-40 bg-[#0f1219]/95 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl overflow-hidden"
+          >
+            <div className="py-2">
+              <div className="px-4 py-2 text-[10px] uppercase tracking-widest text-muted-foreground/50 font-bold">
+                Forslag
+              </div>
+              {suggestions.map((suggestion, index) => (
+                <motion.button
+                  key={suggestion.id}
+                  type="button"
+                  whileHover={{ backgroundColor: "rgba(255, 255, 255, 0.03)" }}
+                  onClick={() => handleSelectSuggestion(suggestion)}
+                  className={`w-full flex items-center gap-4 px-4 py-3 text-left transition-colors ${selectedIndex === index ? "bg-white/5" : ""
+                    }`}
+                >
+                  <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0">
+                    <Laptop className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-foreground truncate pr-4">
+                        {suggestion.name}
+                        {suggestion.isHighMargin && (
+                          <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-500/10 text-green-400 uppercase tracking-wide">
+                            <Sparkles className="h-2 w-2" />
+                            Anbefalet
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-sm font-bold text-primary whitespace-nowrap">
+                        {suggestion.price.toLocaleString('da-DK')} kr
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground block mt-0.5">
+                      {suggestion.brand}
+                    </span>
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+            <div className="px-4 py-2 bg-white/[0.02] border-t border-white/5 flex justify-between items-center text-[10px] text-muted-foreground">
+              <div className="flex gap-4">
+                <span>Tryk <kbd className="font-sans bg-white/10 px-1 rounded mx-0.5">↵</kbd> for at vælge</span>
+                <span><kbd className="font-sans bg-white/10 px-1 rounded mx-0.5">↑↓</kbd> for at navigere</span>
+              </div>
+              <span>PowerPilot v2.0 AI-Search</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }

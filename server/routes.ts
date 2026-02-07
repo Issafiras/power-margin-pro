@@ -37,75 +37,49 @@ interface ExtractedSpecs {
 }
 
 // CPU Tier mapping based on buying guide (S=10, A=8, B=6, C=4, D=1)
-// Tier S: M3/M4 Max, i9-14900HX, Core Ultra 9, Ryzen 9 7945HX
-// Tier A: M3/M4 Pro, M4 base, Core Ultra 7, i7-13700H, Ryzen 7 8845HS
-// Tier B: M2/M3 base, Core Ultra 5, i5-13500H, Ryzen 5 7640HS (Sweet spot)
-// Tier C: i3, Ryzen 3, Core 3 (Budget)
-// Tier D: Celeron, Pentium, Athlon, A-series, N-series (Avoid!)
 function getCpuTier(cpuString: string): number {
   const cpu = cpuString.toLowerCase();
-  
+
   // Tier D (Avoid!) - Score 1
-  // Includes: Celeron, Pentium, Athlon, AMD A-series, Intel N-series
-  if (/celeron|pentium|athlon|amd\s+a\d|intel\s+n\d{4}/i.test(cpu)) return 1;
-  
-  // Tier S (Workstation) - Score 10
-  // Apple M3/M4 Max/Ultra
+  if (/celeron|pentium|athlon|amd\s+a\d|intel\s+n\d{2,4}/i.test(cpu)) return 1;
+
+  // Tier S (Workstation/Ultimate) - Score 10
   if (/apple\s+m[34]\s*(max|ultra)/i.test(cpu)) return 10;
-  // Intel Core Ultra 9 (explicitly Ultra 9, not just "Core 9")
   if (/core\s+ultra\s+9/i.test(cpu)) return 10;
-  // Intel i9 HX series (14th/15th gen high-performance)
-  if (/i9[- ]?(14|15)\d{3}hx/i.test(cpu)) return 10;
-  // AMD Ryzen 9 HX series (7945HX, 8945HX etc.)
+  if (/i9[- ]?(1\d)\d{3}hx/i.test(cpu)) return 10;
   if (/ryzen\s+9.*\d{4}hx/i.test(cpu)) return 10;
-  // Snapdragon X Elite
   if (/snapdragon\s+x\s*elite/i.test(cpu)) return 10;
-  // Ryzen AI 300-series high-end
+  // Specific Ryzen AI 300 high-end (Ryzen AI 9 HX 370 etc)
   if (/ryzen\s+ai\s+9\s+3\d{2}/i.test(cpu)) return 10;
-  
-  // Tier A (High-End) - Score 8
-  // Apple M3/M4 Pro
-  if (/apple\s+m[34]\s*pro/i.test(cpu)) return 8;
-  // Apple M4 base (very strong)
-  if (/apple\s+m4(?!\s*max|\s*pro|\s*ultra)/i.test(cpu)) return 8;
-  // Intel Core Ultra 7 (Series 2)
+
+  // Tier A (High-End) - Score 8-9
+  if (/apple\s+m[34]\s*pro/i.test(cpu)) return 9;
+  if (/apple\s+m4(?!\s*max|\s*ultra)/i.test(cpu)) return 8; // M4 base is very strong
   if (/core\s+ultra\s+7/i.test(cpu)) return 8;
-  // Intel i7 H-series (13th/14th gen)
-  if (/i7[- ]?(13|14)\d{3}h/i.test(cpu)) return 8;
-  // AMD Ryzen 7 HS/H series
+  if (/core\s+7/i.test(cpu)) return 8;
+  if (/i7[- ]?(13|14|15)\d{3}h/i.test(cpu)) return 8;
   if (/ryzen\s+7.*\d{4}h[sx]?/i.test(cpu)) return 8;
-  // AMD Ryzen AI 9
-  if (/ryzen\s+ai\s+9/i.test(cpu)) return 8;
-  // Snapdragon X Plus
+  if (/ryzen\s+ai\s+9/i.test(cpu)) return 8; // Standard Ryzen AI 9
   if (/snapdragon\s+x\s*plus/i.test(cpu)) return 7;
-  
-  // Tier B (Sweet Spot) - Score 6
-  // Apple M2/M3 base (MacBook Air)
-  if (/apple\s+m[23](?!\s*max|\s*pro|\s*ultra)/i.test(cpu)) return 6;
-  // Intel Core Ultra 5
-  if (/core\s+ultra\s+5/i.test(cpu)) return 6;
-  // Intel i5 H/P-series (12th/13th/14th gen)
-  if (/i5[- ]?(12|13|14)\d{3}[hp]/i.test(cpu)) return 6;
-  // AMD Ryzen 5 HS series (7640HS, 8645HS)
+
+  // Tier B (Sweet Spot) - Score 6-7
+  if (/apple\s+m[23](?!\s*max|\s*pro|\s*ultra)/i.test(cpu)) return 7;
+  if (/core\s+ultra\s+5/i.test(cpu)) return 7; // Ultra 5 is solid mid-high
+  if (/ryzen\s+ai\s+7/i.test(cpu)) return 7; // Ryzen AI 7
+  if (/core\s+5/i.test(cpu)) return 6;
+  if (/i5[- ]?(12|13|14|15)\d{3}[hp]/i.test(cpu)) return 6;
   if (/ryzen\s+5.*\d{4}h[sx]?/i.test(cpu)) return 6;
-  // AMD Ryzen 7 U-series (efficient)
   if (/ryzen\s+7.*u/i.test(cpu)) return 6;
-  // Apple M1 (still good)
   if (/apple\s+m1(?!\s*max|\s*pro|\s*ultra)/i.test(cpu)) return 6;
-  
-  // Tier C (Budget) - Score 4
-  // Intel i3 (12th/13th/14th gen)
+
+  // Tier C (Budget/Office) - Score 4-5
   if (/i3[- ]?(12|13|14)\d{3}/i.test(cpu)) return 4;
-  // Intel Core 3
   if (/core\s+3/i.test(cpu)) return 4;
-  // AMD Ryzen 3
   if (/ryzen\s+3/i.test(cpu)) return 4;
-  // AMD Ryzen 5 U-series (older/slower)
-  if (/ryzen\s+5.*u/i.test(cpu)) return 4;
-  // Intel i5 U-series (ultrabook, slower)
-  if (/i5.*u/i.test(cpu)) return 4;
-  
-  // Fallback for older/unknown CPUs (generic patterns)
+  if (/ryzen\s+5.*u/i.test(cpu)) return 4; // Older/efficiency Ryzen 5
+  if (/i5.*u/i.test(cpu)) return 4; // Older/efficiency i5
+
+  // Fallback generic heuristic
   if (/i9/i.test(cpu)) return 8;
   if (/i7/i.test(cpu)) return 6;
   if (/i5/i.test(cpu)) return 5;
@@ -113,156 +87,215 @@ function getCpuTier(cpuString: string): number {
   if (/ryzen\s+9/i.test(cpu)) return 8;
   if (/ryzen\s+7/i.test(cpu)) return 6;
   if (/ryzen\s+5/i.test(cpu)) return 5;
-  
+
   return 0; // Unknown
 }
 
 function getGpuTier(gpuString: string): number {
   const gpu = gpuString.toLowerCase();
-  if (/rtx\s*40\d{2}/i.test(gpu)) return 7;
-  if (/rtx\s*30\d{2}/i.test(gpu)) return 5;
-  if (/gtx/i.test(gpu)) return 3;
+
+  // 50-series (Blackwell) - 2025 Flagships
+  if (/rtx\s*5090/i.test(gpu)) return 9; // Monster
+  if (/rtx\s*5080/i.test(gpu)) return 8; // Very high end
+  if (/rtx\s*5070/i.test(gpu)) return 7; // High end
+  if (/rtx\s*5060/i.test(gpu)) return 6; // Solid mid-range
+
+  // 40-series
+  if (/rtx\s*4090/i.test(gpu)) return 8;
+  if (/rtx\s*4080/i.test(gpu)) return 7;
+  if (/rtx\s*4070/i.test(gpu)) return 6;
+  if (/rtx\s*4060/i.test(gpu)) return 5;
+  if (/rtx\s*4050/i.test(gpu)) return 4;
+
+  // 30-series (Legacy high-end is now mid-range)
+  if (/rtx\s*308\d/i.test(gpu)) return 6;
+  if (/rtx\s*307\d/i.test(gpu)) return 5;
+  if (/rtx\s*3060/i.test(gpu)) return 4;
+  if (/rtx\s*3050/i.test(gpu)) return 3;
+
+  // Entry Level
+  if (/gtx\s*16\d{2}/i.test(gpu)) return 3;
+  if (/rtx\s*2050/i.test(gpu)) return 3;
+
+  // Integrated / Basic
+  if (/intel\s+arc\s+a\d+/i.test(gpu)) return 4; // Arc dedicated is decent
+  if (/radeon\s+rx\s*6\d{2}0/i.test(gpu)) return 4;
+
   if (/intel\s+(?:iris|uhd|arc)/i.test(gpu) || /radeon\s+graphics/i.test(gpu)) return 1;
-  return 0;
+
+  return 0; // Unknown or integrated
 }
 
 function extractSpecs(productName: string, salesArguments?: string): ExtractedSpecs {
   const specs: ExtractedSpecs = {};
-  
+
+  // Clean inputs
+  const cleanName = productName.replace(/[™®]/g, '');
+  const cleanSalesArgs = (salesArguments || "").replace(/[™®]/g, '');
+
   // Combine product name and salesArguments for searching
-  const searchText = salesArguments 
-    ? `${productName}\n${salesArguments}` 
-    : productName;
-  
+  const searchText = cleanSalesArgs
+    ? `${cleanName}\n${cleanSalesArgs}`
+    : cleanName;
+
   // Extract RAM from salesArguments first (most reliable source)
-  // Pattern: "16 GB RAM" or "8GB RAM" or "16 GB DDR4" etc.
-  const ramFromSales = searchText.match(/(\d{1,2})\s*GB\s*(?:RAM|DDR[45]|LPDDR[45x])/i);
-  if (ramFromSales) {
-    const ramValue = parseInt(ramFromSales[1], 10);
-    if (ramValue >= 4 && ramValue <= 128) {
-      specs.ram = `${ramValue} GB`;
-      specs.ramGB = ramValue;
-    }
-  }
-  
-  // Extract Storage from salesArguments
-  // Pattern: "512 GB SSD" or "1 TB SSD" or "512 GB M.2 SSD"
-  const storageFromSales = searchText.match(/(\d+)\s*(?:GB|TB)\s*(?:M\.2\s*)?(?:SSD|NVMe|HDD)/i);
-  if (storageFromSales) {
-    const value = parseInt(storageFromSales[1], 10);
-    const isTB = /TB/i.test(storageFromSales[0]);
-    if (isTB) {
-      specs.storage = `${value} TB`;
-      specs.storageGB = value * 1024;
-    } else if (value >= 64) {
-      specs.storage = `${value} GB`;
-      specs.storageGB = value;
-    }
-  }
-  
-  // Extract CPU - check salesArguments first for full model names
-  const cpuPatterns = [
-    /AMD\s+Ryzen[™]?\s+[3579]\s+\d{4}[A-Z]*/i,
-    /Intel\s+Core[™]?\s+(?:Ultra\s+)?[i579][\s-]?(?:\d{4,5}[A-Z]*)/i,
-    /Intel\s+Core[™]?\s+(?:Ultra\s+)?[i579]/i,
-    /AMD\s+Ryzen[™]?\s+[3579]/i,
-    /Apple\s+M[1234]\s*(?:Pro|Max|Ultra)?/i,
-    /Snapdragon\s+X\s*(?:Elite|Plus)?/i,
-    /Intel\s+(?:Celeron|Pentium|N\d{4})/i,
-    /AMD\s+Athlon/i,
+  const ramPatterns = [
+    /(\d{1,3})\s*GB\s*(?:RAM|DDR[45]|LPDDR[45x])/i,
+    /RAM\s*(\d{1,3})\s*GB/i
   ];
-  
+
+  for (const pattern of ramPatterns) {
+    const match = searchText.match(pattern);
+    if (match) {
+      const ramValue = parseInt(match[1], 10);
+      if (ramValue >= 4 && ramValue <= 128) {
+        specs.ram = `${ramValue} GB`;
+        specs.ramGB = ramValue;
+        break;
+      }
+    }
+  }
+
+  // Extract Storage (Improved Logic)
+  const storagePatterns = [
+    /(\d+)\s*(?:GB|TB|G|T)\s*(?:M\.2\s*)?(?:SSD|NVMe|HDD|PCIe|Gen\d)/i,
+    /Lager\s*(\d+)\s*(?:GB|TB|G|T)/i,
+    /SSD\s*:\s*(\d+)\s*(?:GB|TB|G|T)/i,
+    /HARDDISK\s*:\s*(\d+)\s*(?:GB|TB|G|T)/i
+  ];
+
+  for (const pattern of storagePatterns) {
+    const match = searchText.match(pattern);
+    if (match) {
+      const value = parseInt(match[1], 10);
+      const isTB = /T/i.test(match[0]);
+      if (isTB) {
+        specs.storage = `${value} TB`;
+        specs.storageGB = value * 1024;
+      } else if (value >= 64) {
+        specs.storage = `${value} GB`;
+        specs.storageGB = value;
+      }
+      break;
+    }
+  }
+
+  // Extract CPU - Expanded patterns
+  const cpuPatterns = [
+    // Apple M-series
+    /Apple\s+M[1234]\s*(?:Pro|Max|Ultra)?/i,
+    // Snapdragon
+    /Snapdragon\s+X\s*(?:Elite|Plus)?/i,
+    // Intel Core Ultra (Series 1 & 2)
+    /Intel\s+Core\s+Ultra\s+[3579]\s*(?:\d{3}[A-Z]*)?/i,
+    // Intel Core (Series 1, e.g. Core 5 120U)
+    /Intel\s+Core\s+[3579]\s+\d{3}[A-Z]*/i,
+    // Intel Core i-series (Legacy)
+    /Intel\s+Core\s+i[3579][\s-]?(?:\d{4,5}[A-Z]*)?/i,
+    // AMD Ryzen AI
+    /AMD\s+Ryzen\s+AI\s*\d+\s*(?:\d{3,4}[A-Z]*)?/i,
+    // AMD Ryzen
+    /AMD\s+Ryzen\s+[3579]\s*\d{4}[A-Z]*/i,
+    // Budget
+    /Intel\s+(?:Celeron|Pentium|N\d{2,4})/i,
+    /AMD\s+(?:Athlon|A\d)/i,
+    // Fallback simple
+    /Intel\s+Core\s+[3579]/i, // Catch generic "Core 5"
+    /AMD\s+Ryzen\s+[3579]/i,
+  ];
+
   for (const pattern of cpuPatterns) {
     const match = searchText.match(pattern);
     if (match) {
-      specs.cpu = match[0].trim().replace(/[™]/g, '');
+      specs.cpu = match[0].trim();
       specs.cpuTier = getCpuTier(specs.cpu);
       break;
     }
   }
-  
+
   // Extract GPU
   const gpuPatterns = [
     /RTX\s*\d{4}(?:\s*Ti)?(?:\s*Super)?/i,
     /GTX\s*\d{4}(?:\s*Ti)?/i,
     /GeForce\s+(?:RTX|GTX)\s*\d{4}(?:\s*Ti)?(?:\s*Super)?/i,
     /Radeon\s+RX\s*\d{4}[A-Z]*/i,
-    /Intel\s+(?:Iris\s+Xe|Arc\s+A\d+|UHD\s+Graphics)/i,
-    /AMD\s+Radeon[™]?\s+Graphics/i,
+    /Intel\s+(?:Iris\s+Xe|Arc\s+[\dA-Z]+|UHD\s+Graphics)/i,
+    /AMD\s+Radeon\s+Graphics/i,
   ];
-  
+
   for (const pattern of gpuPatterns) {
     const match = searchText.match(pattern);
     if (match) {
-      specs.gpu = match[0].trim().replace(/[™]/g, '');
+      specs.gpu = match[0].trim();
       specs.gpuTier = getGpuTier(specs.gpu);
       break;
     }
   }
-  
+
   // Fallback: Try parenthesis format from product name if specs not found
   if (!specs.cpu || !specs.ramGB || !specs.storageGB) {
-    // Try 3-value format: (CPU/RAM/Storage) like "(i5/8/512 GB)"
-    const threeValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{1,2})\/(\d{2,4})\s*(?:GB|TB)/i);
-    // Try 2-value format: (CPU/Storage) like "(R7/512 GB)"
-    const twoValueMatch = productName.match(/\((i[3579]|R[3579]|U[3579]|M[1234])\/(\d{2,4})\s*(?:GB|TB)/i);
-    
-    const parenthesisMatch = threeValueMatch || twoValueMatch;
-    const isThreeValue = !!threeValueMatch;
-    
-    if (parenthesisMatch) {
-      const cpuShorthand = parenthesisMatch[1]?.toUpperCase();
-      if (cpuShorthand && !specs.cpu) {
-        let cpuName = "";
-        let tier = 0;
-        if (cpuShorthand.startsWith("I")) {
-          const num = cpuShorthand.charAt(1);
-          cpuName = `Intel Core i${num}`;
-          tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
-        } else if (cpuShorthand.startsWith("R")) {
-          const num = cpuShorthand.charAt(1);
-          cpuName = `AMD Ryzen ${num}`;
-          tier = num === "9" ? 8 : num === "7" ? 6 : num === "5" ? 5 : 4;
-        } else if (cpuShorthand.startsWith("U")) {
-          const num = cpuShorthand.charAt(1);
-          cpuName = `Intel Core Ultra ${num}`;
-          tier = num === "9" ? 9 : num === "7" ? 7 : num === "5" ? 5 : 4;
-        } else if (cpuShorthand.startsWith("M")) {
-          const num = cpuShorthand.charAt(1);
-          cpuName = `Apple M${num}`;
-          tier = num === "4" ? 10 : num === "3" ? 9 : num === "2" ? 8 : 7;
-        }
-        if (cpuName) {
-          specs.cpu = cpuName;
-          specs.cpuTier = tier;
+    // Handling (CPU/RAM/Storage) format
+    // Matches: (i5/16/512), (R7/16GB/1TB), (Core 5/8/512)
+    const complexMatch = cleanName.match(/\(([^/]+)\/(\d{1,2}(?:GB)?)\/(\d{2,4}(?:GB|TB)?)\)/i);
+
+    if (complexMatch) {
+      const cpuPart = complexMatch[1].trim();
+      const ramPart = complexMatch[2].trim();
+      const storagePart = complexMatch[3].trim();
+
+      // CPU Logic
+      if (!specs.cpu) {
+        specs.cpu = cpuPart; // Just use what's there if valid?
+        // Try to normalize
+        if (/^i[3579]$/i.test(cpuPart)) specs.cpu = `Intel Core ${cpuPart}`;
+        else if (/^R[3579]$/i.test(cpuPart)) specs.cpu = `AMD Ryzen ${cpuPart.substring(1)}`;
+        else if (/^M[1234]$/i.test(cpuPart)) specs.cpu = `Apple ${cpuPart}`;
+
+        specs.cpuTier = getCpuTier(specs.cpu);
+      }
+
+      // RAM Logic
+      if (!specs.ramGB) {
+        const ramVal = parseInt(ramPart);
+        if (!isNaN(ramVal)) {
+          specs.ramGB = ramVal;
+          specs.ram = `${ramVal} GB`;
         }
       }
-      
-      if (isThreeValue && !specs.ramGB) {
-        const ramValue = parseInt(parenthesisMatch[2], 10);
-        if (ramValue >= 4 && ramValue <= 64) {
-          specs.ram = `${ramValue} GB`;
-          specs.ramGB = ramValue;
-        }
-      }
-      
+
+      // Storage Logic
       if (!specs.storageGB) {
-        const storageIdx = isThreeValue ? 3 : 2;
-        const storageValue = parseInt(parenthesisMatch[storageIdx], 10);
-        if (storageValue >= 64) {
-          specs.storage = `${storageValue} GB`;
-          specs.storageGB = storageValue;
+        const storageVal = parseInt(storagePart);
+        if (!isNaN(storageVal)) {
+          if (/TB/i.test(storagePart) || (storageVal >= 1 && storageVal <= 8)) {
+            // Assume TB if low number or text says TB
+            specs.storageGB = storageVal * 1024;
+            specs.storage = `${storageVal} TB`;
+          } else {
+            specs.storageGB = storageVal;
+            specs.storage = `${storageVal} GB`;
+          }
         }
+      }
+    } else {
+      // Fallback legacy checking
+      const oldStyleMatch = cleanName.match(/\((i[359]|R[3579]|M[1234])\/(\d{1,2})\/(\d{2,4})\s*(?:GB|TB)/i);
+      if (oldStyleMatch && !specs.cpu) {
+        // ... existing fallback logic mostly relies on this ...
+        const cpuShorthand = oldStyleMatch[1].toUpperCase();
+        if (cpuShorthand.startsWith("I")) specs.cpu = `Intel Core ${cpuShorthand}`;
+        else if (cpuShorthand.startsWith("R")) specs.cpu = `AMD Ryzen ${cpuShorthand.substring(1)}`;
+        specs.cpuTier = getCpuTier(specs.cpu || "");
       }
     }
   }
-  
+
   if (!specs.ramGB) {
     const ramPatterns = [
       /(\d{1,2})\s*GB\s*(?:DDR[45]|RAM|LPDDR[45x])/i,
       /[\/\s](\d{1,2})\s*GB[\/\s]/i,
     ];
-    
+
     for (const pattern of ramPatterns) {
       const match = productName.match(pattern);
       if (match) {
@@ -275,18 +308,19 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
       }
     }
   }
-  
+
+  // Fallback storage patterns if still not found
   if (!specs.storageGB) {
     const storagePatterns = [
-      /(\d+(?:\.\d+)?)\s*TB\s*(?:SSD|NVMe|HDD)?/i,
-      /(\d{3,4})\s*GB\s*(?:SSD|NVMe|HDD)?/i,
+      /(\d+(?:\.\d+)?)\s*(?:TB|T)\s*(?:SSD|NVMe|HDD|PCIe)?/i,
+      /(\d{3,4})\s*(?:GB|G)\s*(?:SSD|NVMe|HDD|PCIe)?/i,
     ];
-    
+
     for (const pattern of storagePatterns) {
       const match = productName.match(pattern);
       if (match) {
         const value = parseFloat(match[1]);
-        if (/TB/i.test(match[0])) {
+        if (/T/i.test(match[0])) {
           specs.storage = `${value} TB`;
           specs.storageGB = value * 1024;
         } else if (value >= 64) {
@@ -297,7 +331,7 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
       }
     }
   }
-  
+
   // Extract screen size (e.g., 14", 15,6", 17,3")
   const screenMatch = searchText.match(/(\d{1,2})[,.]?(\d)?["\u2033]?\s*(?:inch|tommer)?/i);
   if (screenMatch) {
@@ -307,25 +341,25 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
       specs.screenSize = sizeStr;
     }
   }
-  
+
   // Extract screen type (OLED, IPS, TN, VA, etc.)
   const screenTypeMatch = searchText.match(/\b(OLED|IPS|TN|VA|Full\s*HD|FHD|QHD|4K|UHD|Retina|AMOLED|Mini-?LED)\b/i);
   if (screenTypeMatch) {
     specs.screenType = screenTypeMatch[1].toUpperCase().replace(/\s+/g, '');
   }
-  
+
   // Extract screen resolution
   const resolutionMatch = searchText.match(/(\d{3,4})\s*[x×]\s*(\d{3,4})/i);
   if (resolutionMatch) {
     specs.screenResolution = `${resolutionMatch[1]}x${resolutionMatch[2]}`;
   }
-  
+
   // Extract GPU VRAM (e.g., "6 GB", "8 GB" after GPU name)
   const gpuVramMatch = searchText.match(/(?:RTX|GTX|GeForce|Radeon)[^\n]*?(\d+)\s*GB/i);
   if (gpuVramMatch) {
     specs.gpuVram = parseInt(gpuVramMatch[1], 10);
   }
-  
+
   // Extract operating system
   const osPatterns = [
     /Windows\s+1[01]\s*(?:Home|Pro|S)?/i,
@@ -340,7 +374,7 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
       break;
     }
   }
-  
+
   // Extract features
   const features: string[] = [];
   const featurePatterns: [RegExp, string][] = [
@@ -358,17 +392,17 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
     [/2-i-1|2-in-1|Convertible/i, "2-i-1"],
     [/NVMe|PCIe\s*(?:Gen\s*)?\d/i, "NVMe SSD"],
   ];
-  
+
   for (const [pattern, label] of featurePatterns) {
     if (pattern.test(searchText)) {
       features.push(label);
     }
   }
-  
+
   if (features.length > 0) {
     specs.features = features;
   }
-  
+
   return specs;
 }
 
@@ -393,16 +427,16 @@ function calculateUpgradeScore(
   const refStorage = reference.storageGB || 0;
   const altGpu = alternative.gpuTier || 0;
   const refGpu = reference.gpuTier || 0;
-  
+
   const ramDiff = altRam - refRam;
   const cpuDiff = altCpu - refCpu;
   const storageDiff = altStorage - refStorage;
   const gpuDiff = altGpu - refGpu;
-  
+
   let score = 0;
   const reasons: string[] = [];
   const penalties: string[] = [];
-  
+
   // === RAM SCORING (Most Important) ===
   // RAM bands: <8=bad, 8=minimum, 16=standard, 32=nice-to-have
   if (altRam >= 32) {
@@ -417,7 +451,7 @@ function calculateUpgradeScore(
     score -= 20; // Below minimum
     penalties.push("Under 8GB RAM");
   }
-  
+
   // RAM upgrade bonus
   if (ramDiff > 0) {
     score += ramDiff * 3; // Heavy weight for RAM upgrades
@@ -425,7 +459,7 @@ function calculateUpgradeScore(
       reasons.push(`+${ramDiff}GB RAM`);
     }
   }
-  
+
   // === CPU SCORING (Second Priority) ===
   // Bonus for good CPU tiers
   if (altCpu >= 8) { // Tier A or S
@@ -438,7 +472,7 @@ function calculateUpgradeScore(
     score -= 40; // Heavy penalty for D-tier CPUs
     penalties.push("Undgå: Celeron/Pentium CPU");
   }
-  
+
   // CPU upgrade bonus
   if (cpuDiff > 0) {
     score += cpuDiff * 8;
@@ -446,7 +480,7 @@ function calculateUpgradeScore(
       reasons.push("Bedre CPU");
     }
   }
-  
+
   // === STORAGE SCORING ===
   // 512GB is minimum recommended
   if (altStorage >= 1024) { // 1TB+
@@ -459,12 +493,12 @@ function calculateUpgradeScore(
     score -= 5;
     penalties.push("Lille lagerplads");
   }
-  
+
   // Storage upgrade bonus
   if (storageDiff > 0) {
     score += storageDiff * 0.02;
   }
-  
+
   // === GPU SCORING (Only for gaming/video) ===
   // Only add GPU score if reference has dedicated GPU (gaming context)
   if (refGpu >= 3 || altGpu >= 5) { // Gaming context
@@ -473,13 +507,14 @@ function calculateUpgradeScore(
       reasons.push("Bedre grafikkort");
     }
   }
-  
-  // === HIGH MARGIN BONUS ===
+
+  // === HIGH MARGIN BONUS (Seller Priority) ===
+  // These bonuses push high-margin products up WITHOUT showing customer why
   if (isHighMargin) {
-    score += 25;
-    reasons.push("Høj avance");
+    score += 25; // Base high-margin bonus
+    // Note: We don't add "Høj avance" to customer-visible reasons
   }
-  
+
   // === PRICE PROXIMITY BONUS ===
   const priceRatio = alternativePrice / referencePrice;
   if (priceRatio >= 0.9 && priceRatio <= 1.2) {
@@ -487,56 +522,56 @@ function calculateUpgradeScore(
   } else if (priceRatio > 1.2 && priceRatio <= 1.4) {
     score += 5; // Slightly higher but reasonable
   }
-  
+
   // === VALIDITY CHECKS ===
   // Rule 0: Require RAM+Storage for alternatives (CPU optional for broader matches)
   // Alternative must have RAM and Storage; reference specs are optional
   const altHasBasicSpecs = altRam > 0 && altStorage > 0;
   const refHasBasicSpecs = refRam > 0 && refStorage > 0;
-  
+
   // Rule 1: No RAM downgrade allowed (RAM is most important) - only if ref has RAM
   const hasRamDowngrade = refRam > 0 && altRam > 0 && ramDiff < 0;
-  
+
   // Rule 2: No D-tier CPU if reference is C+ tier
   const hasDTierCpu = altCpu === 1;
   const refIsDecentCpu = refCpu >= 4;
   const hasBadCpuDowngrade = hasDTierCpu && refIsDecentCpu;
-  
+
   // Rule 3: Major CPU downgrade (more than 2 tiers) - only if both have CPU
   const hasMajorCpuDowngrade = refCpu > 0 && altCpu > 0 && cpuDiff < -2;
-  
+
   // Rule 4: Price within reasonable range (use provided maxPrice or default to 1.5x)
   const effectiveMaxPrice = maxPrice ?? referencePrice * 1.5;
   const isWithinPriceRange = alternativePrice <= effectiveMaxPrice;
-  
+
   // Determine if this is a valid upgrade
   // If reference has no specs, show any product with RAM+Storage as potential alternatives
   const hasAnyUpgrade = ramDiff > 0 || cpuDiff > 0 || storageDiff > 0 || gpuDiff > 0;
   const refHasNoSpecs = refRam === 0 && refCpu === 0 && refStorage === 0;
-  
-  const isValidUpgrade = 
+
+  const isValidUpgrade =
     altHasBasicSpecs &&  // Alternative must have at least RAM+Storage
     isWithinPriceRange &&
     !hasBadCpuDowngrade &&
     (
       refHasNoSpecs ? true :  // Fallback: show any alt with RAM+Storage when ref has no specs
-      (
-        (hasAnyUpgrade || isHighMargin) && 
-        !hasRamDowngrade && 
-        !hasMajorCpuDowngrade
-      )
+        (
+          (hasAnyUpgrade || isHighMargin) &&
+          !hasRamDowngrade &&
+          !hasMajorCpuDowngrade
+        )
     );
-  
+
   // Combine reasons and penalties
   const allReasons = [...reasons];
   if (penalties.length > 0) {
     allReasons.push(`Advarsel: ${penalties.join(", ")}`);
   }
-  
-  return { 
-    score, 
-    isValidUpgrade, 
-    upgradeReason: allReasons.length > 0 ? allReasons.join(", ") : undefined 
+
+  return {
+    score,
+    isValidUpgrade,
+    upgradeReason: allReasons.length > 0 ? allReasons.join(", ") : undefined
   };
 }
 
@@ -544,7 +579,7 @@ function isHighMarginProduct(brand: string, price: number): { isHighMargin: bool
   if (brand.toLowerCase() === "cepter") {
     return { isHighMargin: true, reason: "Cepter brand" };
   }
-  
+
   const priceStr = Math.floor(price).toString();
   if (priceStr.endsWith("98")) {
     return { isHighMargin: true, reason: "Pris ender på 98" };
@@ -552,34 +587,34 @@ function isHighMarginProduct(brand: string, price: number): { isHighMargin: bool
   if (priceStr.endsWith("92")) {
     return { isHighMargin: true, reason: "Pris ender på 92" };
   }
-  
+
   return { isHighMargin: false };
 }
 
 function findTopPick(products: any[]): number {
   let bestIndex = -1;
   let bestScore = -Infinity;
-  
+
   for (let i = 0; i < products.length; i++) {
     const product = products[i];
     if (!product.isHighMargin) continue;
-    
+
     const score = product.upgradeScore || 0;
     if (score > bestScore) {
       bestScore = score;
       bestIndex = i;
     }
   }
-  
+
   return bestIndex;
 }
 
 function getImageUrl(productImage: any): string | undefined {
   if (!productImage) return undefined;
-  
+
   const basePath = productImage.basePath || "";
   const variants = productImage.variants || [];
-  
+
   if (variants.length > 0 && variants[0].filename) {
     // Add slash between basePath and filename
     const separator = basePath.endsWith("/") ? "" : "/";
@@ -590,7 +625,7 @@ function getImageUrl(productImage: any): string | undefined {
     // Images are hosted on Power's CDN, not main domain
     return `https://media.power-cdn.net${imagePath}`;
   }
-  
+
   return undefined;
 }
 
@@ -598,7 +633,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   // Sync all laptops from Power.dk to database
   app.post("/api/sync", async (req, res) => {
     try {
@@ -606,9 +641,9 @@ export async function registerRoutes(
       let from = 0;
       let totalSynced = 0;
       let hasMore = true;
-      
+
       console.log("Starting sync of all laptops from Power.dk...");
-      
+
       const headers = {
         "User-Agent": getRandomUserAgent(),
         "Accept": "application/json",
@@ -616,21 +651,21 @@ export async function registerRoutes(
         "Referer": "https://www.power.dk/",
         "Origin": "https://www.power.dk",
       };
-      
+
       while (hasMore) {
         const url = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=${pageSize}&from=${from}`;
         console.log(`Fetching page from=${from}, size=${pageSize}`);
-        
+
         const response = await axios.get(url, { headers, timeout: 30000 });
         const data = response.data;
         const rawProducts = data?.products || [];
         const totalCount = data?.totalProductCount || 0;
-        
+
         if (rawProducts.length === 0) {
           hasMore = false;
           break;
         }
-        
+
         const productsToInsert: InsertProduct[] = rawProducts.map((item: any, index: number) => {
           const name = item.title || "Ukendt produkt";
           const brand = item.manufacturerName || "Ukendt";
@@ -638,16 +673,16 @@ export async function registerRoutes(
           const originalPrice = item.previousPrice;
           const productId = item.productId?.toString() || `product-${from}-${index}`;
           const imageUrl = getImageUrl(item.productImage);
-          
+
           let productUrl = item.url || "";
           if (productUrl && !productUrl.startsWith("http")) {
             productUrl = `https://www.power.dk${productUrl}`;
           }
-          
+
           const marginInfo = isHighMarginProduct(brand, price);
           const salesArguments = item.salesArguments || "";
           const specs = extractSpecs(name, salesArguments);
-          
+
           return {
             id: productId,
             name,
@@ -663,31 +698,31 @@ export async function registerRoutes(
             specs,
           };
         });
-        
+
         await storage.upsertProducts(productsToInsert);
         totalSynced += productsToInsert.length;
         from += pageSize;
-        
+
         console.log(`Synced ${totalSynced}/${totalCount} products`);
-        
+
         if (from >= totalCount || rawProducts.length < pageSize) {
           hasMore = false;
         }
-        
+
         // Small delay to avoid rate limiting
         await new Promise(resolve => setTimeout(resolve, 500));
       }
-      
+
       const finalCount = await storage.getProductCount();
       console.log(`Sync complete. Total products in database: ${finalCount}`);
-      
+
       res.json({
         success: true,
         totalSynced,
         totalInDatabase: finalCount,
         message: `Synkroniserede ${totalSynced} produkter`,
       });
-      
+
     } catch (error: any) {
       console.error("Sync error:", error.message);
       res.status(500).json({
@@ -696,7 +731,7 @@ export async function registerRoutes(
       });
     }
   });
-  
+
   // Autocomplete suggestions endpoint
   app.get("/api/suggestions", async (req, res) => {
     try {
@@ -741,9 +776,9 @@ export async function registerRoutes(
     try {
       const query = req.query.q as string;
       const useDatabase = req.query.db === "true";
-      
+
       if (!query || query.trim().length === 0) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "Søgeord er påkrævet",
           products: [],
           totalCount: 0,
@@ -756,7 +791,7 @@ export async function registerRoutes(
       if (useDatabase && dbProductCount > 0) {
         console.log(`Searching database for: ${query}`);
         const dbResults = await storage.searchProducts(query);
-        
+
         if (dbResults.length > 0) {
           // Get the reference product from search results
           const refItem = dbResults[0];
@@ -777,27 +812,30 @@ export async function registerRoutes(
             priceDifference: 0,
             upgradeScore: 0,
           };
-          
+
           // Fetch ALL products from database to find alternatives (not just search results)
           const allDbProducts = await storage.getAllProducts();
           const referencePrice = reference.price;
           const referenceSpecs = reference.specs as ExtractedSpecs;
           // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
           const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
-          
+
           // Filter to valid alternatives with RAM+Storage specs
           const validDbProducts = allDbProducts.filter((p) => {
             if (p.id === reference.id) return false;
             if (p.price > maxPrice) return false;
-            
+
             const specs = p.specs as ExtractedSpecs | null;
             if (!specs) return false;
             if (!specs.ramGB || specs.ramGB === 0) return false;
             if (!specs.storageGB || specs.storageGB === 0) return false;
-            
+
+            // Enforce strict high-margin requirement for suggestions per user request (92/98/Cepter)
+            if (!p.isHighMargin) return false;
+
             return true;
           });
-          
+
           const scoredAlternatives = validDbProducts.map((p) => {
             const specs = (p.specs as ExtractedSpecs) || {};
             const priceDiff = p.price - referencePrice;
@@ -809,7 +847,7 @@ export async function registerRoutes(
               referencePrice,
               maxPrice
             );
-            
+
             return {
               id: p.id,
               name: p.name,
@@ -830,19 +868,19 @@ export async function registerRoutes(
               upgradeReason,
             };
           });
-          
+
           const validUpgrades = scoredAlternatives
             .filter((alt) => alt.isValidUpgrade)
             .sort((a, b) => b.upgradeScore - a.upgradeScore)
             .slice(0, 8);
-          
+
           const topPickIndex = findTopPick(validUpgrades);
           if (topPickIndex >= 0) {
             validUpgrades[topPickIndex].isTopPick = true;
           }
-          
+
           const products = [reference, ...validUpgrades];
-          
+
           console.log(`Found ${products.length} products (1 reference + ${validUpgrades.length} alternatives) from database for "${query}"`);
           return res.json({
             products,
@@ -863,16 +901,16 @@ export async function registerRoutes(
       };
 
       const searchUrl = `${POWER_API_BASE}?q=${encodeURIComponent(query)}&cat=${LAPTOP_CATEGORY_ID}&size=15&from=0`;
-      
+
       console.log("Fetching from Power.dk:", searchUrl);
-      
+
       const response = await axios.get(searchUrl, {
         headers,
         timeout: 15000,
       });
 
       const data = response.data;
-      
+
       let rawProducts = data?.products || [];
       const totalCount = data?.totalProductCount || rawProducts.length;
 
@@ -895,19 +933,19 @@ export async function registerRoutes(
       const mainBrand = mainProduct.manufacturerName || "Ukendt";
       const mainPrice = mainProduct.price || 0;
       const mainMarginInfo = isHighMarginProduct(mainBrand, mainPrice);
-      
+
       // Try to get specs from database first, fallback to extraction using salesArguments
       const mainProductId = mainProduct.productId?.toString() || "product-0";
       const dbProduct = await storage.getProductById(mainProductId);
       const mainSalesArgs = mainProduct.salesArguments || "";
       const mainSpecs = (dbProduct?.specs as ExtractedSpecs) || extractSpecs(mainName, mainSalesArgs);
       console.log(`Main product ${mainProductId} specs from ${dbProduct ? 'database' : 'extraction'}:`, mainSpecs);
-      
+
       let mainProductUrl = mainProduct.url || "";
       if (mainProductUrl && !mainProductUrl.startsWith("http")) {
         mainProductUrl = `https://www.power.dk${mainProductUrl}`;
       }
-      
+
       const reference = {
         id: mainProductId,
         name: mainName,
@@ -925,11 +963,11 @@ export async function registerRoutes(
         priceDifference: 0,
         upgradeScore: 0,
       };
-      
+
       // Fetch alternatives from database if available
       let products = [reference];
       const dbAltCount = await storage.getProductCount();
-      
+
       if (dbAltCount > 0) {
         console.log("Fetching alternatives from database...");
         const dbAlternatives = await storage.getAllProducts();
@@ -937,24 +975,24 @@ export async function registerRoutes(
         const referenceSpecs = reference.specs;
         // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
         const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
-        
+
         // Filter to HIGH MARGIN products with RAM+Storage specs (CPU optional) and within price range
         const validDbProducts = dbAlternatives.filter((p) => {
           if (p.id === reference.id) return false;
           if (p.price > maxPrice) return false;
-          
+
           // ONLY show high margin alternatives
           if (!p.isHighMargin) return false;
-          
+
           // Require at least RAM+Storage for valid comparison (CPU optional)
           const specs = p.specs as ExtractedSpecs | null;
           if (!specs) return false;
           if (!specs.ramGB || specs.ramGB === 0) return false;
           if (!specs.storageGB || specs.storageGB === 0) return false;
-          
+
           return true;
         });
-        
+
         // Map DB products directly to response format and score them
         const scoredAlternatives = validDbProducts.map((p) => {
           const specs = (p.specs as ExtractedSpecs) || {};
@@ -967,7 +1005,7 @@ export async function registerRoutes(
             referencePrice,
             maxPrice
           );
-          
+
           return {
             id: p.id,
             name: p.name,
@@ -988,18 +1026,18 @@ export async function registerRoutes(
             upgradeReason,
           };
         });
-        
+
         // Sort by upgrade score and take top 8
         const validUpgrades = scoredAlternatives
           .filter((alt) => alt.isValidUpgrade)
           .sort((a, b) => b.upgradeScore - a.upgradeScore)
           .slice(0, 8);
-        
+
         const topPickIndex = findTopPick(validUpgrades);
         if (topPickIndex >= 0) {
           validUpgrades[topPickIndex].isTopPick = true;
         }
-        
+
         products = [reference, ...validUpgrades];
         console.log(`Found ${validUpgrades.length} valid alternatives from database`);
       } else {
@@ -1007,7 +1045,7 @@ export async function registerRoutes(
         console.log("Database empty, fetching alternatives from Power.dk...");
         if (rawProducts.length === 1) {
           const categoryUrl = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=20&from=0`;
-          
+
           try {
             const altResponse = await axios.get(categoryUrl, { headers, timeout: 15000 });
             const altProducts = altResponse.data?.products || [];
@@ -1015,7 +1053,7 @@ export async function registerRoutes(
               .filter((p: any) => p.productId?.toString() !== reference.id)
               .filter((p: any) => p.stockCount > 0 || p.canAddToCart)
               .slice(0, 15);
-            
+
             const mappedAlts = alternatives.map((item: any) => {
               const name = item.title || "Ukendt produkt";
               const brand = item.manufacturerName || "Ukendt";
@@ -1027,12 +1065,12 @@ export async function registerRoutes(
               if (productUrl && !productUrl.startsWith("http")) {
                 productUrl = `https://www.power.dk${productUrl}`;
               }
-              
+
               const priceDiff = price - reference.price;
               const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
                 specs, reference.specs, marginInfo.isHighMargin, price, reference.price
               );
-              
+
               return {
                 id: item.productId?.toString() || "",
                 name, brand, price,
@@ -1051,17 +1089,17 @@ export async function registerRoutes(
                 upgradeReason,
               };
             });
-            
+
             const validUpgrades = mappedAlts
               .filter((alt: any) => alt.isValidUpgrade && alt.isHighMargin)
               .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
               .slice(0, 8);
-            
+
             const topPickIndex = findTopPick(validUpgrades);
             if (topPickIndex >= 0) {
               validUpgrades[topPickIndex].isTopPick = true;
             }
-            
+
             products = [reference, ...validUpgrades];
             console.log(`Added ${validUpgrades.length} alternatives from Power.dk category`);
           } catch (altError) {
@@ -1078,10 +1116,10 @@ export async function registerRoutes(
 
       console.log(`Found ${products.length} products for query "${query}"`);
       res.json(result);
-      
+
     } catch (error: any) {
       console.error("Search API error:", error.message);
-      
+
       if (axios.isAxiosError(error)) {
         if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
           return res.status(504).json({
@@ -1091,7 +1129,7 @@ export async function registerRoutes(
             searchQuery: req.query.q || "",
           });
         }
-        
+
         if (error.response?.status === 403 || error.response?.status === 429) {
           return res.status(503).json({
             error: "Adgang til Power.dk API er midlertidigt blokeret. Prøv igen om et øjeblik.",
@@ -1100,16 +1138,301 @@ export async function registerRoutes(
             searchQuery: req.query.q || "",
           });
         }
-        
+
         console.error("API Response:", error.response?.status, error.response?.data);
       }
-      
+
       res.status(500).json({
         error: "Der opstod en fejl ved søgning. Prøv igen.",
         products: [],
         totalCount: 0,
         searchQuery: req.query.q || "",
       });
+    }
+  });
+
+
+  // Compare products endpoint
+  app.get("/api/compare", async (req, res) => {
+    try {
+      const idsParam = req.query.ids as string;
+      if (!idsParam) {
+        return res.status(400).json({ error: "Missing ids parameter" });
+      }
+
+      const ids = idsParam.split(",").map(id => id.trim()).filter(id => id.length > 0);
+      const products: ProductWithMargin[] = [];
+
+      console.log(`Comparing products: ${ids.join(", ")}`);
+
+      const headers = {
+        "User-Agent": getRandomUserAgent(),
+        "Accept": "application/json",
+      };
+
+      // Helper to fetch details
+      const fetchDetails = async (id: string) => {
+        // 1. Try DB first
+        try {
+          const dbProduct = await storage.getProductById(id);
+          if (dbProduct) {
+            const specs = (dbProduct.specs as ExtractedSpecs) || {};
+            return {
+              id: dbProduct.id,
+              name: dbProduct.name,
+              brand: dbProduct.brand,
+              price: dbProduct.price,
+              originalPrice: dbProduct.originalPrice ?? undefined,
+              imageUrl: dbProduct.imageUrl ?? undefined,
+              productUrl: dbProduct.productUrl,
+              sku: dbProduct.sku ?? undefined,
+              inStock: dbProduct.inStock ?? true,
+              isHighMargin: dbProduct.isHighMargin ?? false,
+              marginReason: dbProduct.marginReason ?? undefined,
+              specs,
+              // Add default fields for ProductWithMargin
+              isTopPick: false,
+              priceDifference: 0,
+              upgradeScore: 0,
+              upgradeReason: undefined
+            } as ProductWithMargin;
+          }
+        } catch (dbErr) {
+          console.error(`DB error for ${id}:`, dbErr);
+        }
+
+        // 2. Try Power Search API with specific ID query
+        // Matches logic in generic search but targeted
+        const searchUrl = `${POWER_API_BASE}?q=${id}&cat=${LAPTOP_CATEGORY_ID}&size=1`;
+        try {
+          console.log(`Fetching ${id} from Power API...`);
+          const response = await axios.get(searchUrl, { headers, timeout: 5000 });
+          const raw = response.data?.products?.[0];
+
+          if (raw) {
+            const name = raw.title || "Ukendt produkt";
+            const price = raw.price || 0;
+            const brand = raw.manufacturerName || "Ukendt";
+            const marginInfo = isHighMarginProduct(brand, price);
+            const sales = raw.salesArguments || "";
+            const specs = extractSpecs(name, sales);
+
+            let productUrl = raw.url || "";
+            if (productUrl && !productUrl.startsWith("http")) {
+              productUrl = `https://www.power.dk${productUrl}`;
+            }
+
+            return {
+              id: raw.productId?.toString() || id,
+              name,
+              brand,
+              price,
+              originalPrice: raw.previousPrice || undefined,
+              imageUrl: getImageUrl(raw.productImage) || undefined,
+              productUrl,
+              sku: raw.barcode || raw.elguideId,
+              inStock: raw.stockCount > 0 || raw.canAddToCart,
+              isHighMargin: marginInfo.isHighMargin,
+              marginReason: marginInfo.reason,
+              specs,
+              isTopPick: false,
+              priceDifference: 0,
+              upgradeScore: 0,
+              upgradeReason: undefined
+            } as ProductWithMargin;
+          } else {
+            console.log(`Product ${id} not found in Power API`);
+          }
+        } catch (e: any) {
+          console.error(`Failed to fetch ${id} from Power:`, e.message);
+        }
+        return null;
+      };
+
+      for (const id of ids) {
+        const product = await fetchDetails(id);
+        if (product) {
+          products.push(product);
+        }
+      }
+
+      res.json({ products });
+
+    } catch (error: any) {
+      console.error("Compare error:", error);
+      res.status(500).json({ error: "Failed to compare products" });
+    }
+  });
+
+
+  // AI Pitch Generation endpoint (Scraping Power.dk or Fallback)
+  app.post("/api/generate-pitch", async (req, res) => {
+    const { mainProduct, topPick } = req.body;
+
+    // Helper to generate deterministic pitch if Scraping/AI fails
+    const generateFallbackPitch = () => {
+      const priceDiff = topPick.priceDifference || (topPick.price - mainProduct.price);
+      const dailyCost = Math.round(priceDiff / 365);
+
+      let valuePitch = "";
+      let lossPitch = "";
+      let futurePitch = "";
+
+      // Value Pitch Logic
+      if (priceDiff > 0) {
+        valuePitch = `For kun ${dailyCost} kr om dagen får du en maskine der er langt hurtigere. Det er en lille pris for at undgå ventetid i hverdagen.`;
+      } else {
+        valuePitch = `Du sparer ${Math.abs(priceDiff)} kr og får samtidig en bedre maskine. Det er en ren win-win situation.`;
+      }
+
+      // Loss Aversion Logic
+      if ((mainProduct.specs?.ramGB || 0) < 16 && (topPick.specs?.ramGB || 0) >= 16) {
+        lossPitch = "Den billige model har kun 8GB RAM - det bliver hurtigt en flaskehals. Med 16GB slipper du for at den hakker når du har mange faner åbne.";
+      } else if ((mainProduct.specs?.storageGB || 0) < 512 && (topPick.specs?.storageGB || 0) >= 512) {
+        lossPitch = "256GB lager bliver fyldt overraskende hurtigt. Med 512GB undgår du at skulle slette dine filer og billeder om et år.";
+      } else {
+        lossPitch = "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom. Denne opgradering sikrer den gode oplevelse.";
+      }
+
+      // Future Proofing Logic
+      futurePitch = `Denne model er bygget med nyere komponenter der holder 2-3 år længere. Det er billigere end at skulle skifte computeren ud før tid.`;
+
+      return {
+        valuePitch,
+        lossAversionPitch: lossPitch,
+        futureProofingPitch: futurePitch,
+        isAiGenerated: false
+      };
+    };
+
+    try {
+      // 1. Try Scraping Power.dk for their "AI Summary"
+      console.log("Attempting to scrape Power.dk AI Summary...");
+      const puppeteer = (await import("puppeteer")).default;
+
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      const page = await browser.newPage();
+
+      // Construct comparison URL like: https://www.power.dk/sammenlign/?id=4188966&id=4150738
+      const url = `https://www.power.dk/sammenlign/?id=${mainProduct.id}&id=${topPick.id}`;
+      console.log(`Navigating to: ${url}`);
+
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      console.log("Page loading...");
+      await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+      console.log("Page loaded. Searching for AI text...");
+
+      // Debug: Log page title
+      const title = await page.title();
+      console.log(`Page Title: ${title}`);
+
+      // Wait for at least some content
+      await page.waitForSelector('body');
+
+      const aiText = await page.evaluate(() => {
+        // Look for 'AI-genereret' or 'Al-genereret' (typo safeguard)
+        // The structure is usually a header/label followed by the text
+        const keywords = ['AI-genereret oversigt', 'Al-genereret oversigt', 'Vores vurdering'];
+
+        // Find all elements containing the keyword
+        const allElements = Array.from(document.querySelectorAll('*'));
+        const headerEl = allElements.find(el =>
+          el.children.length === 0 && // Leaf node or text node wrapper
+          (el as HTMLElement).innerText &&
+          keywords.some(kw => (el as HTMLElement).innerText.includes(kw))
+        );
+
+        if (!headerEl) return null;
+
+        // Strategy: The text is likely in a sibling div or the parent's next sibling
+        // 1. Check parent's text content (if it contains more than just the header)
+        const parent = headerEl.parentElement as HTMLElement;
+        if (parent && parent.innerText.length > 50 && parent.innerText.length < 2000) {
+          // If parent has meaningful text and isn't the whole page
+          return parent.innerText;
+        }
+
+        // 3. Fallback: Brute force text extraction from body text
+        // This is useful if the DOM structure is complex
+        const bodyText = document.body.innerText || "";
+        const keywordIndex = bodyText.indexOf('AI-genereret oversigt');
+        if (keywordIndex !== -1) {
+          // Grab the next 1500 chars
+          const snippet = bodyText.substring(keywordIndex, keywordIndex + 1500);
+          return snippet;
+        }
+
+        return null;
+      });
+
+      await browser.close();
+
+      if (aiText) {
+        // Clean the text
+        let cleanText = aiText;
+
+        // Remove specific unwanted phrases (Exact matches or partials)
+        const unwantedPhrases = [
+          'AI-genereret oversigt',
+          'Al-genereret oversigt',
+          'Ny!',
+          'Juryen mener',
+          'Fjern',
+          'Nulstil',
+          'Kopier link',
+          'Indkøbskurv',
+          'Tilføj til kurv',
+          'Læs mere',
+          'Vis produkt',
+          'Power.dk AI Sammenligning',
+          'Vent venligst et øjeblik, mens vi genererer et resumé af de vigtigste forskelle.',
+          'Type understøttede hukommelseskort'
+        ];
+
+        unwantedPhrases.forEach(r => {
+          cleanText = cleanText.split(r).join("");
+        });
+
+        // Regex cleanup for dynamic patterns
+        cleanText = cleanText.replace(/Førpris:.*?\d+,-/g, "");
+        cleanText = cleanText.replace(/Tilbud gælder fra.*?(\d+\/\d+|-|\.)+/g, "");
+        cleanText = cleanText.replace(/Nettomål \(uden emballage\).*?\(D x B x H\)/g, "");
+        cleanText = cleanText.replace(/Bruttomål \(med emballage\).*?\(D x B x H\)/g, "");
+        cleanText = cleanText.replace(/Type understøttede hukommelseskort/g, "");
+        cleanText = cleanText.replace(/\s+/g, " "); // Normalize whitespace
+
+        // Heuristic cleanup:
+        // 1. Remove empty lines
+        // 2. Remove lines that are just prices or weird symbols
+        const lines = cleanText.split('\n')
+          .map(l => l.trim())
+          .filter(l => l.length > 30); // Valid sentences usually > 30 chars
+
+        cleanText = lines.slice(0, 5).join('\n\n'); // Take first 5 good paragraphs
+
+        if (cleanText.length > 50) {
+          return res.json({
+            valuePitch: cleanText,
+            lossAversionPitch: "",
+            futureProofingPitch: "",
+            isAiGenerated: true,
+            source: "Power.dk"
+          });
+        }
+      }
+      console.log("Puppeteer: Valid AI content not found in extracted text");
+
+
+      // 2. Fallback to Local Logic
+      console.log("Using fallback logic.");
+      res.json(generateFallbackPitch());
+
+    } catch (error: any) {
+      console.error("AI Pitch generation/scraping error:", error.message);
+      res.json(generateFallbackPitch());
     }
   });
 
@@ -1126,7 +1449,7 @@ export async function registerRoutes(
       }
 
       const doc = new PDFDocument({ margin: 50, size: "A4" });
-      
+
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader(
         "Content-Disposition",
@@ -1138,7 +1461,7 @@ export async function registerRoutes(
       // Header
       doc.fontSize(20).text("Power.dk - Produktsammenligning", { align: "center" });
       doc.moveDown(0.5);
-      
+
       // Date and search info
       const now = new Date();
       doc.fontSize(10).fillColor("#666666");
@@ -1152,26 +1475,26 @@ export async function registerRoutes(
       const colHeaders = ["Produkt", "Mærke", "Pris (DKK)", "Specs", "Avance"];
       const startX = 50;
       const rowHeight = 40;
-      
+
       // Draw table header
       doc.fontSize(9).fillColor("#FFFFFF");
       doc.rect(startX, tableTop, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
-      
+
       let xPos = startX;
       colHeaders.forEach((header, i) => {
         doc.fillColor("#FFFFFF").text(header, xPos + 4, tableTop + 5, { width: colWidths[i] - 8, height: 15 });
         xPos += colWidths[i];
       });
-      
+
       // Draw table rows
       let yPos = tableTop + 20;
-      
+
       products.forEach((product, index) => {
         // Check for page break
         if (yPos > 720) {
           doc.addPage();
           yPos = 50;
-          
+
           // Redraw header on new page
           doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
           xPos = startX;
@@ -1181,22 +1504,22 @@ export async function registerRoutes(
           });
           yPos += 20;
         }
-        
+
         const isHighMargin = product.isHighMargin;
         const rowColor = isHighMargin ? "#FFF5EB" : (index % 2 === 0 ? "#FFFFFF" : "#F8F8F8");
-        
+
         // Row background
         doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).fill(rowColor);
-        
+
         // Row border
         doc.strokeColor("#DDDDDD").lineWidth(0.5);
         doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).stroke();
-        
+
         // Cell data
         const specs = product.specs || {};
         const specText = [specs.cpu, specs.ram, specs.storage].filter(Boolean).join(", ");
         const marginText = isHighMargin ? `Høj${product.marginReason ? "\n(" + product.marginReason + ")" : ""}` : "Standard";
-        
+
         const rowData = [
           (isHighMargin ? "★ " : "") + product.name.substring(0, 50) + (product.name.length > 50 ? "..." : ""),
           product.brand,
@@ -1204,15 +1527,15 @@ export async function registerRoutes(
           specText.substring(0, 35) + (specText.length > 35 ? "..." : ""),
           marginText,
         ];
-        
+
         xPos = startX;
         doc.fontSize(7).fillColor(isHighMargin ? "#FF6600" : "#333333");
-        
+
         rowData.forEach((cell, i) => {
           doc.text(cell, xPos + 3, yPos + 4, { width: colWidths[i] - 6, height: rowHeight - 8 });
           xPos += colWidths[i];
         });
-        
+
         yPos += rowHeight;
       });
 
@@ -1221,7 +1544,7 @@ export async function registerRoutes(
       doc.text(`Genereret af Power Margin Optimizer Pro - ${products.length} produkter`, 50, 780, { align: "center" });
 
       doc.end();
-      
+
     } catch (error: any) {
       console.error("PDF export error:", error.message);
       res.status(500).json({ error: "Fejl ved PDF-eksport: " + error.message });
@@ -1256,7 +1579,7 @@ export async function registerRoutes(
       // Create workbook and worksheet
       const workbook = XLSX.utils.book_new();
       const worksheet = XLSX.utils.json_to_sheet(data);
-      
+
       // Set column widths
       worksheet["!cols"] = [
         { wch: 50 }, // Produkt
@@ -1281,7 +1604,7 @@ export async function registerRoutes(
         `attachment; filename="power-produkter-${Date.now()}.xlsx"`
       );
       res.send(buffer);
-      
+
     } catch (error: any) {
       console.error("Excel export error:", error.message);
       res.status(500).json({ error: "Fejl ved Excel-eksport: " + error.message });
