@@ -1,9 +1,10 @@
-import { createApp } from "../server/app";
+import { createApp } from "../server/app.js";
 
 let app: any;
 
 export default async (req: any, res: any) => {
     if (!app) {
+        console.log("Initializing Express app for Vercel...");
         const result = await createApp();
         app = result.app;
     }
