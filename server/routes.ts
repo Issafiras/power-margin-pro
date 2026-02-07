@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import axios from "axios";
 import PDFDocument from "pdfkit";
 import * as XLSX from "xlsx";
-import { storage } from "./storage.js";
+import { storage } from "./storage";
 import type { InsertProduct, ProductWithMargin } from "@shared/schema";
 
 const POWER_API_BASE = "https://www.power.dk/api/v2/productlists";
