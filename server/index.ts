@@ -60,7 +60,7 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
+const startServer = async () => {
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
@@ -90,8 +90,19 @@ app.use((req, res, next) => {
   // Other ports are firewalled. Default to 5000 if not specified.
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(port, "0.0.0.0", () => {
-    log(`serving on port ${port}`);
-  });
-})();
+  if (process.env.VERCEL !== "1") {
+    const port = parseInt(process.env.PORT || "5000", 10);
+    httpServer.listen(port, "0.0.0.0", () => {
+      log(`serving on port ${port}`);
+    });
+  }
+};
+
+if (process.env.VERCEL !== "1") {
+  startServer();
+} else {
+  // For Vercel, we need to ensure routes are registered
+  registerRoutes(httpServer, app);
+}
+
+export default app;
