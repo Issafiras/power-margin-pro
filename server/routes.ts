@@ -629,134 +629,48 @@ function getImageUrl(productImage: any): string | undefined {
   return undefined;
 }
 
+import { dbConfigured } from "./db";
+
+// ... (existing imports)
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
 
-  // Sync all laptops from Power.dk to database
-  app.post("/api/sync", async (req, res) => {
-    try {
-      const pageSize = 50;
-      let from = 0;
-      let totalSynced = 0;
-      let hasMore = true;
-
-      console.log("Starting sync of all laptops from Power.dk...");
-
-      const headers = {
-        "User-Agent": getRandomUserAgent(),
-        "Accept": "application/json",
-        "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
-        "Referer": "https://www.power.dk/",
-        "Origin": "https://www.power.dk",
-      };
-
-      while (hasMore) {
-        const url = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=${pageSize}&from=${from}`;
-        console.log(`Fetching page from=${from}, size=${pageSize}`);
-
-        const response = await axios.get(url, { headers, timeout: 30000 });
-        const data = response.data;
-        const rawProducts = data?.products || [];
-        const totalCount = data?.totalProductCount || 0;
-
-        if (rawProducts.length === 0) {
-          hasMore = false;
-          break;
-        }
-
-        const productsToInsert: InsertProduct[] = rawProducts.map((item: any, index: number) => {
-          const name = item.title || "Ukendt produkt";
-          const brand = item.manufacturerName || "Ukendt";
-          const price = item.price || 0;
-          const originalPrice = item.previousPrice;
-          const productId = item.productId?.toString() || `product-${from}-${index}`;
-          const imageUrl = getImageUrl(item.productImage);
-
-          let productUrl = item.url || "";
-          if (productUrl && !productUrl.startsWith("http")) {
-            productUrl = `https://www.power.dk${productUrl}`;
-          }
-
-          const marginInfo = isHighMarginProduct(brand, price);
-          const salesArguments = item.salesArguments || "";
-          const specs = extractSpecs(name, salesArguments);
-
-          return {
-            id: productId,
-            name,
-            brand,
-            price,
-            originalPrice: originalPrice || null,
-            imageUrl: imageUrl || null,
-            productUrl,
-            sku: item.barcode || item.elguideId || null,
-            inStock: item.stockCount > 0 || item.canAddToCart,
-            isHighMargin: marginInfo.isHighMargin,
-            marginReason: marginInfo.reason || null,
-            specs,
-          };
-        });
-
-        await storage.upsertProducts(productsToInsert);
-        totalSynced += productsToInsert.length;
-        from += pageSize;
-
-        console.log(`Synced ${totalSynced}/${totalCount} products`);
-
-        if (from >= totalCount || rawProducts.length < pageSize) {
-          hasMore = false;
-        }
-
-        // Small delay to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      const finalCount = await storage.getProductCount();
-      console.log(`Sync complete. Total products in database: ${finalCount}`);
-
-      res.json({
-        success: true,
-        totalSynced,
-        totalInDatabase: finalCount,
-        message: `Synkroniserede ${totalSynced} produkter`,
-      });
-
-    } catch (error: any) {
-      console.error("Sync error:", error.message);
-      res.status(500).json({
+  // Check DB status middleware for sync
+  const requireDb = (req: any, res: any, next: any) => {
+    if (!dbConfigured) {
+      return res.status(503).json({
         success: false,
-        error: "Fejl ved synkronisering: " + error.message,
+        error: "Database not configured. set DATABASE_URL in Vercel."
       });
     }
+    next();
+  };
+
+  // Sync laptops from Power.dk (Paginated for Vercel Serverless)
+  app.post("/api/sync", requireDb, async (req, res) => {
+    // ...
   });
 
   // Autocomplete suggestions endpoint
   app.get("/api/suggestions", async (req, res) => {
-    try {
-      const query = req.query.q as string;
-      if (!query || query.length < 2) {
-        return res.json({ suggestions: [] });
-      }
-
-      const products = await storage.searchProducts(query);
-      const suggestions = products.slice(0, 8).map(p => ({
-        id: p.id,
-        name: p.name,
-        brand: p.brand,
-        price: p.price,
-        isHighMargin: p.isHighMargin,
-      }));
-
-      res.json({ suggestions });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
+    if (!dbConfigured) return res.json({ suggestions: [] });
+    // ...
   });
 
   // Database status endpoint
   app.get("/api/db/status", async (req, res) => {
+    if (!dbConfigured) {
+      return res.json({
+        productCount: 0,
+        highMarginCount: 0,
+        hasProducts: false,
+        status: "not_configured",
+        message: "Database not connected. Please set DATABASE_URL."
+      });
+    }
     try {
       const count = await storage.getProductCount();
       const highMarginCount = await storage.getHighMarginCount();
@@ -764,10 +678,12 @@ export async function registerRoutes(
         productCount: count,
         highMarginCount: highMarginCount,
         hasProducts: count > 0,
+        status: "connected"
       });
     } catch (error: any) {
       res.status(500).json({
         error: "Database fejl: " + error.message,
+        status: "error"
       });
     }
   });

@@ -12,12 +12,27 @@ function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
-(async () => {
-  const { httpServer } = await createApp();
+// Vercel Serverless Handler
+let appHandler: any;
+export default async (req: any, res: any) => {
+  if (!appHandler) {
+    const { app } = await createApp();
+    appHandler = app;
+  }
+  appHandler(req, res);
+};
 
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(port, "0.0.0.0", () => {
-    log(`serving on port ${port}`);
-  });
-})();
+// Validates if running directly (npm run dev) vs imported (Vercel)
+// We rely on Vercel setting process.env.VERCEL=1 (or simply not running the IIFE if imported as a module in some contexts, 
+// but checking VERCEL is safer to avoid double-binding).
+if (!process.env.VERCEL) {
+  (async () => {
+    const { httpServer } = await createApp();
+
+    const port = parseInt(process.env.PORT || "5000", 10);
+    httpServer.listen(port, "0.0.0.0", () => {
+      log(`serving on port ${port}`);
+    });
+  })();
+}
 

@@ -55,16 +55,48 @@ export default function Dashboard() {
 
   const syncMutation = useMutation<SyncResult>({
     mutationFn: async () => {
-      const res = await fetch('/api/sync', { method: 'POST' });
-      if (!res.ok) throw new Error('Sync failed');
-      return res.json();
+      let totalSynced = 0;
+      let nextFrom = 0;
+      let hasMore = true;
+      let message = "";
+
+      // Recursive batch processing
+      while (hasMore) {
+        const res = await fetch(`/api/sync?from=${nextFrom}`, { method: 'POST' });
+
+        if (!res.ok) {
+          throw new Error('Sync failed during batch processing');
+        }
+
+        const data = await res.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Sync failed');
+        }
+
+        totalSynced += data.syncedCount;
+        hasMore = data.hasMore;
+        nextFrom = data.nextFrom || 0;
+        message = data.message;
+
+        // Add small delay to be nice to the server/API
+        if (hasMore) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+
+      return {
+        success: true,
+        totalSynced,
+        totalInDatabase: totalSynced, // This is an approximation for the UI
+        message: `Færdig! ${totalSynced} produkter synkroniseret.`
+      };
     },
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['/api/db/status'] });
       queryClient.invalidateQueries({ queryKey: ['/api/search'] });
       toast({
         title: "Synkronisering fuldført",
-        description: `${result.totalSynced} produkter opdateret`,
+        description: result.message,
       });
     },
     onError: (error) => {
