@@ -2,16 +2,15 @@
     "version": 2,
     "outputDirectory": "dist/public",
     "functions": {
-        "server/index.ts": {
-            "includeFiles": "dist/public/**",
+        "api/index.ts": {
+            "includeFiles": "dist/p**",
             "maxDuration": 60
         }
     },
     "rewrites": [
         {
             "source": "/api/(.*)",
-            "destination": "/server/index.ts"
-        },
+      "destination": "/api/index"        },
         {
             "source": "/((?!api/.*).*)",
             "destination": "/index.html"
