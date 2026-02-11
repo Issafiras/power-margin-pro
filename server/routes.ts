@@ -1336,6 +1336,12 @@ export async function registerRoutes(
     };
 
     try {
+      // Skip Puppeteer on Vercel as it's too heavy and requires specific binaries
+      if (process.env.VERCEL) {
+        console.log("Vercel environment detected - using fallback pitch generation");
+        return res.json(generateFallbackPitch());
+      }
+
       // 1. Try Scraping Power.dk for their "AI Summary"
       console.log("Attempting to scrape Power.dk AI Summary...");
       const puppeteer = (await import("puppeteer")).default;
