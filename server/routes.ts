@@ -5,7 +5,8 @@ import PDFDocument from "pdfkit";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import type { InsertProduct, ProductWithMargin } from "@shared/schema";
-import { dbConfigured } from "./db";
+import { db, dbConfigured } from "./db";
+import { sql } from "drizzle-orm";
 
 const POWER_API_BASE = "https://www.power.dk/api/v2/productlists";
 const LAPTOP_CATEGORY_ID = 1341;
@@ -637,7 +638,6 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // Check DB status middleware for sync
   const requireDb = (req: any, res: any, next: any) => {
     if (!dbConfigured) {
       return res.status(503).json({
@@ -647,6 +647,26 @@ export async function registerRoutes(
     }
     next();
   };
+
+  // Health check endpoint (No DB required)
+  app.get("/api/health", (req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // DB Connection test endpoint
+  app.get("/api/db/test-connection", async (req, res) => {
+    if (!dbConfigured) {
+      return res.status(503).json({ success: false, error: "Database not configured." });
+    }
+    try {
+      console.log("Testing DB connection...");
+      const result = await db.execute(sql`SELECT 1 as connected`);
+      res.json({ success: true, result });
+    } catch (error: any) {
+      console.error("DB Connection test failed:", error);
+      res.status(500).json({ success: false, error: error.message, stack: error.stack });
+    }
+  });
 
   // Sync laptops from Power.dk (Paginated for Vercel Serverless)
   app.post("/api/sync", requireDb, async (req, res) => {
@@ -773,8 +793,10 @@ export async function registerRoutes(
         status: "connected"
       });
     } catch (error: any) {
+      console.error("CRITICAL: DB status error:", error);
       res.status(500).json({
-        error: "Database fejl: " + error.message,
+        error: "Database fejl: " + (error.message || "Ukendt fejl"),
+        details: error.toString(),
         status: "error"
       });
     }
