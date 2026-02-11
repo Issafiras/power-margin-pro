@@ -1,10 +1,10 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
-import { rm, readFile } from "fs/promises";
+import { rm, readFile, mkdir, writeFile, cp } from "fs/promises";
+import path from "path";
 
-// server deps to bundle to reduce openat(2) syscalls
-// which helps cold start times
-const allowlist = [
+// Dependencies to bundle into the serverless function (reduces cold start)
+const bundleDeps = [
   "@google/generative-ai",
   "axios",
   "connect-pg-simple",
@@ -32,19 +32,31 @@ const allowlist = [
   "zod-validation-error",
 ];
 
+const VERCEL_OUT = ".vercel/output";
+const FUNC_DIR = `${VERCEL_OUT}/functions/api/index.func`;
+
 async function buildAll() {
+  // Clean previous builds
   await rm("dist", { recursive: true, force: true });
+  await rm(VERCEL_OUT, { recursive: true, force: true });
 
-  console.log("building client...");
-  await viteBuild();
+  // ── 1. Build client with Vite ──────────────────────────────────────
+  console.log("1/4  Building client (Vite)...");
+  await viteBuild({
+    build: {
+      outDir: path.resolve("dist/public"),
+      emptyOutDir: true,
+    },
+  });
 
-  console.log("building server (local)...");
+  // ── 2. Build local dev server ──────────────────────────────────────
+  console.log("2/4  Building local server (esbuild → dist/index.cjs)...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [
     ...Object.keys(pkg.dependencies || {}),
     ...Object.keys(pkg.devDependencies || {}),
   ];
-  const externals = allDeps.filter((dep) => !allowlist.includes(dep));
+  const externals = allDeps.filter((dep) => !bundleDeps.includes(dep));
 
   await esbuild({
     entryPoints: ["server/index.ts"],
@@ -52,36 +64,78 @@ async function buildAll() {
     bundle: true,
     format: "cjs",
     outfile: "dist/index.cjs",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
+    define: { "process.env.NODE_ENV": '"production"' },
     minify: true,
     external: externals,
     logLevel: "info",
   });
 
-  // Build the Vercel serverless function
-  // Bundles api/index.ts + all ../server/ + ../shared/ imports into a single file
-  // so Vercel doesn't need to resolve cross-directory TypeScript imports at runtime
-  console.log("building vercel serverless function...");
+  // ── 3. Build Vercel serverless function ────────────────────────────
+  console.log("3/4  Building Vercel serverless function...");
+  await mkdir(FUNC_DIR, { recursive: true });
+
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
     bundle: true,
     format: "esm",
-    outfile: "api/index.js",
-    define: {
-      "process.env.NODE_ENV": '"production"',
-    },
+    outfile: `${FUNC_DIR}/index.mjs`,
+    define: { "process.env.NODE_ENV": '"production"' },
     minify: true,
-    // pdfkit & xlsx are dynamically imported in route handlers — keep external
+    // pdfkit & xlsx are dynamically imported — keep external
     external: ["pdfkit", "xlsx"],
     banner: {
-      // ESM compat shim for packages that use require()
-      js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`,
+      js: `import{createRequire}from'module';const require=createRequire(import.meta.url);`,
     },
     logLevel: "info",
   });
+
+  // Write function config
+  await writeFile(
+    `${FUNC_DIR}/.vc-config.json`,
+    JSON.stringify(
+      {
+        runtime: "nodejs20.x",
+        handler: "index.mjs",
+        maxDuration: 60,
+        launcherType: "Nodejs",
+      },
+      null,
+      2
+    )
+  );
+
+  // ── 4. Write Vercel Build Output config ────────────────────────────
+  console.log("4/4  Writing Vercel Build Output config...");
+
+  // Copy static files
+  await mkdir(`${VERCEL_OUT}/static`, { recursive: true });
+  await cp("dist/public", `${VERCEL_OUT}/static`, { recursive: true });
+
+  // Write routing config
+  await writeFile(
+    `${VERCEL_OUT}/config.json`,
+    JSON.stringify(
+      {
+        version: 3,
+        routes: [
+          // API routes → serverless function
+          { src: "/api/(.*)", dest: "/api/index" },
+          // Static file handling (assets, etc.)
+          { handle: "filesystem" },
+          // SPA fallback → index.html
+          { src: "/(.*)", dest: "/index.html" },
+        ],
+      },
+      null,
+      2
+    )
+  );
+
+  console.log("✅ Build complete!");
+  console.log(`   Static files:  ${VERCEL_OUT}/static/`);
+  console.log(`   Function:      ${FUNC_DIR}/index.mjs`);
+  console.log(`   Config:        ${VERCEL_OUT}/config.json`);
 }
 
 buildAll().catch((err) => {
