@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import axios from "axios";
 import { storage } from "./storage";
-import type { InsertProduct, ProductWithMargin } from "@shared/schema";
+import type { InsertProduct, ProductWithMargin } from "../shared/schema";
 import { db, dbConfigured } from "./db";
 import { sql } from "drizzle-orm";
 
