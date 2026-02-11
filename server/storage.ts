@@ -81,42 +81,41 @@ export class DatabaseStorage implements IStorage {
   async upsertProducts(items: InsertProduct[]): Promise<void> {
     if (items.length === 0) return;
 
-    for (const item of items) {
-      const specs = (item.specs as ProductSpecs | undefined) ?? null;
-      await db
-        .insert(products)
-        .values({
-          id: item.id,
-          name: item.name,
-          brand: item.brand,
-          price: item.price,
-          originalPrice: item.originalPrice ?? null,
-          imageUrl: item.imageUrl ?? null,
-          productUrl: item.productUrl,
-          sku: item.sku ?? null,
-          inStock: item.inStock ?? true,
-          isHighMargin: item.isHighMargin ?? false,
-          marginReason: item.marginReason ?? null,
-          specs,
-        })
-        .onConflictDoUpdate({
-          target: products.id,
-          set: {
-            name: item.name,
-            brand: item.brand,
-            price: item.price,
-            originalPrice: item.originalPrice ?? null,
-            imageUrl: item.imageUrl ?? null,
-            productUrl: item.productUrl,
-            sku: item.sku ?? null,
-            inStock: item.inStock ?? true,
-            isHighMargin: item.isHighMargin ?? false,
-            marginReason: item.marginReason ?? null,
-            specs,
-            updatedAt: new Date(),
-          },
-        });
-    }
+    // Use bulk insert for better performance
+    await db
+      .insert(products)
+      .values(items.map(item => ({
+        id: item.id,
+        name: item.name,
+        brand: item.brand,
+        price: item.price,
+        originalPrice: item.originalPrice ?? null,
+        imageUrl: item.imageUrl ?? null,
+        productUrl: item.productUrl,
+        sku: item.sku ?? null,
+        inStock: item.inStock ?? true,
+        isHighMargin: item.isHighMargin ?? false,
+        marginReason: item.marginReason ?? null,
+        specs: (item.specs as ProductSpecs | undefined) ?? null,
+        updatedAt: new Date(),
+      })))
+      .onConflictDoUpdate({
+        target: products.id,
+        set: {
+          name: sql`excluded.name`,
+          brand: sql`excluded.brand`,
+          price: sql`excluded.price`,
+          originalPrice: sql`excluded.original_price`,
+          imageUrl: sql`excluded.image_url`,
+          productUrl: sql`excluded.product_url`,
+          sku: sql`excluded.sku`,
+          inStock: sql`excluded.in_stock`,
+          isHighMargin: sql`excluded.is_high_margin`,
+          marginReason: sql`excluded.margin_reason`,
+          specs: sql`excluded.specs`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
   }
 
   async searchProducts(query: string): Promise<DbProduct[]> {

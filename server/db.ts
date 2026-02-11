@@ -6,7 +6,7 @@ const { Pool } = pg;
 
 // Prevent hard crash on startup if DATABASE_URL is missing
 // This allows the Vercel function to start and report the error properly via API response
-const isSupabase = process.env.DATABASE_URL?.includes("supabase.co");
+const isSupabase = process.env.DATABASE_URL?.includes("supabase.co") || process.env.DATABASE_URL?.includes("supabase.com");
 const isProduction = process.env.NODE_ENV === "production";
 
 let pool: pg.Pool;

@@ -5,6 +5,7 @@ import PDFDocument from "pdfkit";
 import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import type { InsertProduct, ProductWithMargin } from "@shared/schema";
+import { dbConfigured } from "./db";
 
 const POWER_API_BASE = "https://www.power.dk/api/v2/productlists";
 const LAPTOP_CATEGORY_ID = 1341;
@@ -629,9 +630,7 @@ function getImageUrl(productImage: any): string | undefined {
   return undefined;
 }
 
-import { dbConfigured } from "./db";
 
-// ... (existing imports)
 
 export async function registerRoutes(
   httpServer: Server,
@@ -651,13 +650,106 @@ export async function registerRoutes(
 
   // Sync laptops from Power.dk (Paginated for Vercel Serverless)
   app.post("/api/sync", requireDb, async (req, res) => {
-    // ...
+    try {
+      const from = parseInt(req.query.from as string) || 0;
+      const size = 30; // Small batch size for serverless limits
+
+      const headers = {
+        "User-Agent": getRandomUserAgent(),
+        "Accept": "application/json",
+        "Referer": "https://www.power.dk/",
+      };
+
+      // Fetch from Power.dk category (Laptops = 1341)
+      const url = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=${size}&from=${from}`;
+      console.log(`Syncing batch from ${from} (size ${size}):`, url);
+
+      const response = await axios.get(url, { headers, timeout: 20000 });
+      const data = response.data;
+      const rawProducts = data?.products || [];
+      const totalCount = data?.totalProductCount || 0;
+
+      if (rawProducts.length === 0) {
+        return res.json({
+          success: true,
+          syncedCount: 0,
+          totalCount,
+          hasMore: false,
+          message: "Ingen flere produkter at synkronisere."
+        });
+      }
+
+      const productsToUpsert: InsertProduct[] = rawProducts.map((p: any) => {
+        const name = p.title || "Ukendt produkt";
+        const brand = p.manufacturerName || "Ukendt";
+        const price = p.price || 0;
+        const marginInfo = isHighMarginProduct(brand, price);
+        const salesArgs = p.salesArguments || "";
+        const specs = extractSpecs(name, salesArgs);
+
+        let productUrl = p.url || "";
+        if (productUrl && !productUrl.startsWith("http")) {
+          productUrl = `https://www.power.dk${productUrl}`;
+        }
+
+        return {
+          id: p.productId?.toString() || `p-${Math.random().toString(36).substr(2, 9)}`,
+          name,
+          brand,
+          price,
+          originalPrice: p.previousPrice || null,
+          imageUrl: getImageUrl(p.productImage) || null,
+          productUrl,
+          sku: p.barcode || p.elguideId || null,
+          inStock: p.stockCount > 0 || p.canAddToCart,
+          isHighMargin: marginInfo.isHighMargin,
+          marginReason: marginInfo.reason || null,
+          specs: specs,
+        };
+      });
+
+      await storage.upsertProducts(productsToUpsert);
+
+      const syncedCount = productsToUpsert.length;
+      const nextFrom = from + syncedCount;
+      const hasMore = nextFrom < totalCount;
+
+      res.json({
+        success: true,
+        syncedCount,
+        nextFrom,
+        hasMore,
+        totalCount,
+        message: `Synkroniserede ${syncedCount} produkter (total: ${nextFrom}/${totalCount})`
+      });
+
+    } catch (error: any) {
+      console.error("Sync API error:", error.message);
+      res.status(500).json({
+        success: false,
+        error: "Fejl ved synkronisering: " + error.message
+      });
+    }
   });
 
   // Autocomplete suggestions endpoint
   app.get("/api/suggestions", async (req, res) => {
     if (!dbConfigured) return res.json({ suggestions: [] });
-    // ...
+    try {
+      const q = req.query.q as string;
+      if (!q || q.length < 2) return res.json({ suggestions: [] });
+
+      const results = await storage.searchProducts(q);
+      const suggestions = results
+        .map(p => p.name)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 8);
+
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("Suggestions error:", error);
+      res.json({ suggestions: [] });
+    }
   });
 
   // Database status endpoint
