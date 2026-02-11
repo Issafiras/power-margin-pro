@@ -65,7 +65,7 @@ async function buildAll() {
   // so Vercel doesn't need to resolve cross-directory TypeScript imports at runtime
   console.log("building vercel serverless function...");
   await esbuild({
-    entryPoints: ["api/index.ts"],
+    entryPoints: ["server/index.ts"],
     platform: "node",
     bundle: true,
     format: "esm",
