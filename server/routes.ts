@@ -817,7 +817,14 @@ export async function registerRoutes(
       }
 
       // Try database search first if db=true or if we have products in database
-      const dbProductCount = await storage.getProductCount();
+      let dbProductCount = 0;
+      try {
+        if (dbConfigured) {
+          dbProductCount = await storage.getProductCount();
+        }
+      } catch (dbErr) {
+        console.warn("DB product count check failed, falling back to API:", (dbErr as Error).message);
+      }
       if (useDatabase && dbProductCount > 0) {
         console.log(`Searching database for: ${query}`);
         const dbResults = await storage.searchProducts(query);
@@ -1295,12 +1302,15 @@ export async function registerRoutes(
   });
 
 
-  // AI Pitch Generation endpoint (Scraping Power.dk or Fallback)
+  // AI Pitch Generation endpoint (Deterministic fallback - Puppeteer removed for Vercel compatibility)
   app.post("/api/generate-pitch", async (req, res) => {
-    const { mainProduct, topPick } = req.body;
+    try {
+      const { mainProduct, topPick } = req.body;
 
-    // Helper to generate deterministic pitch if Scraping/AI fails
-    const generateFallbackPitch = () => {
+      if (!mainProduct || !topPick) {
+        return res.status(400).json({ error: "Missing mainProduct or topPick in request body" });
+      }
+
       const priceDiff = topPick.priceDifference || (topPick.price - mainProduct.price);
       const dailyCost = Math.round(priceDiff / 365);
 
@@ -1327,148 +1337,21 @@ export async function registerRoutes(
       // Future Proofing Logic
       futurePitch = `Denne model er bygget med nyere komponenter der holder 2-3 år længere. Det er billigere end at skulle skifte computeren ud før tid.`;
 
-      return {
+      res.json({
         valuePitch,
         lossAversionPitch: lossPitch,
         futureProofingPitch: futurePitch,
         isAiGenerated: false
-      };
-    };
-
-    try {
-      // Skip Puppeteer on Vercel as it's too heavy and requires specific binaries
-      if (process.env.VERCEL) {
-        console.log("Vercel environment detected - using fallback pitch generation");
-        return res.json(generateFallbackPitch());
-      }
-
-      // 1. Try Scraping Power.dk for their "AI Summary"
-      console.log("Attempting to scrape Power.dk AI Summary...");
-      const puppeteer = (await import("puppeteer")).default;
-
-      const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
-      const page = await browser.newPage();
-
-      // Construct comparison URL like: https://www.power.dk/sammenlign/?id=4188966&id=4150738
-      const url = `https://www.power.dk/sammenlign/?id=${mainProduct.id}&id=${topPick.id}`;
-      console.log(`Navigating to: ${url}`);
-
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-      console.log("Page loading...");
-      await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-      console.log("Page loaded. Searching for AI text...");
-
-      // Debug: Log page title
-      const title = await page.title();
-      console.log(`Page Title: ${title}`);
-
-      // Wait for at least some content
-      await page.waitForSelector('body');
-
-      const aiText = await page.evaluate(() => {
-        // Look for 'AI-genereret' or 'Al-genereret' (typo safeguard)
-        // The structure is usually a header/label followed by the text
-        const keywords = ['AI-genereret oversigt', 'Al-genereret oversigt', 'Vores vurdering'];
-
-        // Find all elements containing the keyword
-        const allElements = Array.from(document.querySelectorAll('*'));
-        const headerEl = allElements.find(el =>
-          el.children.length === 0 && // Leaf node or text node wrapper
-          (el as HTMLElement).innerText &&
-          keywords.some(kw => (el as HTMLElement).innerText.includes(kw))
-        );
-
-        if (!headerEl) return null;
-
-        // Strategy: The text is likely in a sibling div or the parent's next sibling
-        // 1. Check parent's text content (if it contains more than just the header)
-        const parent = headerEl.parentElement as HTMLElement;
-        if (parent && parent.innerText.length > 50 && parent.innerText.length < 2000) {
-          // If parent has meaningful text and isn't the whole page
-          return parent.innerText;
-        }
-
-        // 3. Fallback: Brute force text extraction from body text
-        // This is useful if the DOM structure is complex
-        const bodyText = document.body.innerText || "";
-        const keywordIndex = bodyText.indexOf('AI-genereret oversigt');
-        if (keywordIndex !== -1) {
-          // Grab the next 1500 chars
-          const snippet = bodyText.substring(keywordIndex, keywordIndex + 1500);
-          return snippet;
-        }
-
-        return null;
-      });
-
-      await browser.close();
-
-      if (aiText) {
-        // Clean the text
-        let cleanText = aiText;
-
-        // Remove specific unwanted phrases (Exact matches or partials)
-        const unwantedPhrases = [
-          'AI-genereret oversigt',
-          'Al-genereret oversigt',
-          'Ny!',
-          'Juryen mener',
-          'Fjern',
-          'Nulstil',
-          'Kopier link',
-          'Indkøbskurv',
-          'Tilføj til kurv',
-          'Læs mere',
-          'Vis produkt',
-          'Power.dk AI Sammenligning',
-          'Vent venligst et øjeblik, mens vi genererer et resumé af de vigtigste forskelle.',
-          'Type understøttede hukommelseskort'
-        ];
-
-        unwantedPhrases.forEach(r => {
-          cleanText = cleanText.split(r).join("");
-        });
-
-        // Regex cleanup for dynamic patterns
-        cleanText = cleanText.replace(/Førpris:.*?\d+,-/g, "");
-        cleanText = cleanText.replace(/Tilbud gælder fra.*?(\d+\/\d+|-|\.)+/g, "");
-        cleanText = cleanText.replace(/Nettomål \(uden emballage\).*?\(D x B x H\)/g, "");
-        cleanText = cleanText.replace(/Bruttomål \(med emballage\).*?\(D x B x H\)/g, "");
-        cleanText = cleanText.replace(/Type understøttede hukommelseskort/g, "");
-        cleanText = cleanText.replace(/\s+/g, " "); // Normalize whitespace
-
-        // Heuristic cleanup:
-        // 1. Remove empty lines
-        // 2. Remove lines that are just prices or weird symbols
-        const lines = cleanText.split('\n')
-          .map(l => l.trim())
-          .filter(l => l.length > 30); // Valid sentences usually > 30 chars
-
-        cleanText = lines.slice(0, 5).join('\n\n'); // Take first 5 good paragraphs
-
-        if (cleanText.length > 50) {
-          return res.json({
-            valuePitch: cleanText,
-            lossAversionPitch: "",
-            futureProofingPitch: "",
-            isAiGenerated: true,
-            source: "Power.dk"
-          });
-        }
-      }
-      console.log("Puppeteer: Valid AI content not found in extracted text");
-
-
-      // 2. Fallback to Local Logic
-      console.log("Using fallback logic.");
-      res.json(generateFallbackPitch());
 
     } catch (error: any) {
-      console.error("AI Pitch generation/scraping error:", error.message);
-      res.json(generateFallbackPitch());
+      console.error("Pitch generation error:", error.message);
+      res.status(500).json({
+        valuePitch: "Denne opgradering giver dig bedre ydelse til en fornuftig pris.",
+        lossAversionPitch: "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom.",
+        futureProofingPitch: "Nyere komponenter holder længere - det er billigere end at skifte før tid.",
+        isAiGenerated: false
+      });
     }
   });
 
