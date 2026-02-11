@@ -1,8 +1,6 @@
 import type { Express } from "express";
-import { createServer, type Server } from "http";
+import type { Server } from "http";
 import axios from "axios";
-import PDFDocument from "pdfkit";
-import * as XLSX from "xlsx";
 import { storage } from "./storage";
 import type { InsertProduct, ProductWithMargin } from "@shared/schema";
 import { db, dbConfigured } from "./db";
@@ -1367,6 +1365,8 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Ingen produkter at eksportere" });
       }
 
+      // Dynamic import to avoid loading ~14MB font files at cold start (crashes Vercel)
+      const PDFDocument = (await import("pdfkit")).default;
       const doc = new PDFDocument({ margin: 50, size: "A4" });
 
       res.setHeader("Content-Type", "application/pdf");
@@ -1494,6 +1494,9 @@ export async function registerRoutes(
         "Høj Avance": product.isHighMargin ? "Ja" : "Nej",
         "Grund": product.marginReason || "",
       }));
+
+      // Dynamic import to avoid bundling issues in serverless
+      const XLSX = await import("xlsx");
 
       // Create workbook and worksheet
       const workbook = XLSX.utils.book_new();
