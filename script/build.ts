@@ -38,7 +38,7 @@ async function buildAll() {
   console.log("building client...");
   await viteBuild();
 
-  console.log("building server...");
+  console.log("building server (local)...");
   const pkg = JSON.parse(await readFile("package.json", "utf-8"));
   const allDeps = [
     ...Object.keys(pkg.dependencies || {}),
@@ -46,7 +46,6 @@ async function buildAll() {
   ];
   const externals = allDeps.filter((dep) => !allowlist.includes(dep));
 
-  // Build the local dev server bundle
   await esbuild({
     entryPoints: ["server/index.ts"],
     platform: "node",
@@ -62,24 +61,23 @@ async function buildAll() {
   });
 
   // Build the Vercel serverless function
-  // This bundles api/index.ts + all ../server/ imports into a single file
-  // so Vercel doesn't need to resolve cross-directory TypeScript imports
+  // Bundles api/index.ts + all ../server/ + ../shared/ imports into a single file
+  // so Vercel doesn't need to resolve cross-directory TypeScript imports at runtime
   console.log("building vercel serverless function...");
   await esbuild({
     entryPoints: ["api/index.ts"],
     platform: "node",
     bundle: true,
     format: "esm",
-    outfile: "api/index.mjs",
+    outfile: "api/index.js",
     define: {
       "process.env.NODE_ENV": '"production"',
     },
     minify: true,
-    // pdfkit has native font assets that don't bundle well — keep it external
-    // xlsx also has optional native deps
+    // pdfkit & xlsx are dynamically imported in route handlers — keep external
     external: ["pdfkit", "xlsx"],
     banner: {
-      // ESM shims for __dirname and require() which some deps need
+      // ESM compat shim for packages that use require()
       js: `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`,
     },
     logLevel: "info",

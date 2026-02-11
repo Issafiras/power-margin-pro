@@ -5,7 +5,7 @@ server/public/
 vite.config.ts.*
 *.tar.gz
 .vercel/
-api/index.mjs
+api/index.js
 .env*
 .config/
 .local/
