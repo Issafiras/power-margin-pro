@@ -29,7 +29,8 @@ if (!process.env.DATABASE_URL) {
 } else {
   pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: isProduction || isSupabase ? { rejectUnauthorized: false } : undefined,
+    ssl: isSupabase ? { rejectUnauthorized: false } : (isProduction ? { rejectUnauthorized: false } : undefined),
+    connectionTimeoutMillis: 10000,
   });
   db = drizzle(pool, { schema });
 }
