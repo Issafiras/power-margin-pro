@@ -23,7 +23,7 @@ const bundleDeps = [
   "openai",
   "passport",
   "passport-local",
-  "pg",
+  "postgres",
   "stripe",
   "uuid",
   "ws",

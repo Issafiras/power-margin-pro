@@ -1,40 +1,38 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "../shared/schema";
-
-const { Pool } = pg;
 
 // Prevent hard crash on startup if DATABASE_URL is missing
 // This allows the Vercel function to start and report the error properly via API response
 const isSupabase = process.env.DATABASE_URL?.includes("supabase.co") || process.env.DATABASE_URL?.includes("supabase.com");
-const isProduction = process.env.NODE_ENV === "production";
 
-let pool: pg.Pool;
+let client: postgres.Sql<{}>;
 let db: ReturnType<typeof drizzle>;
 
 if (!process.env.DATABASE_URL) {
   console.warn("WARNING: DATABASE_URL is missing. Database functionality will fail.");
-  // Create a dummy pool/db that throws on access, or just leave them undefined/handled
-  // We'll throw only when they are accessed
+  // Create a dummy client/db that throws on access
   const throwMissingDb = () => { throw new Error("DATABASE_URL must be set. Did you forget to provision a database?"); };
-  pool = { connect: throwMissingDb, query: throwMissingDb, end: throwMissingDb } as any;
+  // @ts-ignore - limited dummy implementation
+  client = throwMissingDb as any;
   db = {
     select: throwMissingDb,
     insert: throwMissingDb,
     update: throwMissingDb,
     delete: throwMissingDb,
     query: {},
-    transaction: throwMissingDb
+    transaction: throwMissingDb,
+    execute: throwMissingDb,
   } as any;
 } else {
-  pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: isSupabase ? { rejectUnauthorized: false } : (isProduction ? { rejectUnauthorized: false } : undefined),
-    connectionTimeoutMillis: 10000,
+  // Use postgres.js with prepare: false for Supabase Transaction Pooler (port 6543) compatibility
+  client = postgres(process.env.DATABASE_URL, {
+    prepare: false,
+    ssl: isSupabase ? { rejectUnauthorized: false } : undefined
   });
-  db = drizzle(pool, { schema });
+  db = drizzle(client, { schema });
 }
 
 export const dbConfigured = !!process.env.DATABASE_URL;
 
-export { pool, db };
+export { client, db };
