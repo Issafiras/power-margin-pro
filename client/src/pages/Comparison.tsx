@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { Loader2, ArrowLeft, Check, X, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AiSummarySection } from "@/components/AiSummarySection"; // Import
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import type { ProductWithMargin } from "@shared/schema";
@@ -85,6 +86,9 @@ export default function Comparison() {
                 <h1 className="text-3xl font-bold gradient-text">Produktsammenligning</h1>
                 <div className="w-[100px]"></div> {/* Spacer for alignment */}
             </div>
+
+            {/* AI Summary Section */}
+            <AiSummarySection ids={ids} />
 
             <div className="overflow-x-auto rounded-lg border border-border/50 bg-card/30 glass-card">
                 <Table>

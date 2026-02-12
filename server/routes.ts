@@ -1305,6 +1305,49 @@ export async function registerRoutes(
     }
   });
 
+  // Power.dk AI Comparison Proxy Endpoint
+  app.post("/api/ai-compare", async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!ids || !Array.isArray(ids) || ids.length < 2) {
+        return res.status(400).json({ error: "Kræver mindst 2 produkt-ID'er" });
+      }
+
+      // Construct Power.dk API URL
+      // Format: https://www.power.dk/api/v2/products/comparison-summary?productIds=ID1&productIds=ID2
+      const queryString = ids.map(id => `productIds=${id}`).join("&");
+      const url = `https://www.power.dk/api/v2/products/comparison-summary?${queryString}`;
+
+      console.log("Fetching AI summary from Power.dk:", url);
+
+      const response = await axios.get(url, {
+        headers: {
+          "User-Agent": getRandomUserAgent(),
+          "Accept": "application/json"
+        },
+        timeout: 10000
+      });
+
+      // The API returns a JSON string containing HTML
+      const htmlContent = response.data;
+
+      res.json({ summary: htmlContent });
+
+    } catch (error: any) {
+      console.error("AI Compare Proxy Error:", error.message);
+
+      // Fallback: If Power API fails, generate deterministic summary
+      // We need to fetch products first for deterministic summary, but let's just return a generic error or simple text if API fails
+      // Since fetching products again is expensive here inside the catch block without the products object readily available.
+      // We'll just return an error message that the client can handle or display.
+      // Or we can try to return a simple text if we have product data? No, let's keep it simple.
+      res.status(502).json({
+        error: "Kunne ikke hente AI-oversigt fra Power.dk",
+        details: error.message
+      });
+    }
+  });
+
 
   // AI Pitch Generation endpoint (Deterministic fallback - Puppeteer removed for Vercel compatibility)
   app.post("/api/generate-pitch", async (req, res) => {
