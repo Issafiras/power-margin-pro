@@ -135,8 +135,8 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
       <form onSubmit={handleSubmit} className="relative z-50">
         <motion.div
           className={`relative rounded-2xl overflow-hidden transition-shadow duration-300 ${isFocused
-              ? "shadow-[0_0_40px_-5px_rgba(249,115,22,0.3)] ring-1 ring-primary/50"
-              : "shadow-2xl shadow-black/20 border border-white/5"
+            ? "shadow-[0_0_40px_-5px_rgba(249,115,22,0.3)] ring-1 ring-primary/50"
+            : "shadow-2xl shadow-black/20 border border-white/5"
             }`}
           initial={false}
           animate={isFocused ? { scale: 1.02 } : { scale: 1 }}
@@ -241,7 +241,7 @@ export function SearchBar({ onSearch, isLoading = false }: SearchBarProps) {
                         )}
                       </span>
                       <span className="text-sm font-bold text-primary whitespace-nowrap">
-                        {suggestion.price.toLocaleString('da-DK')} kr
+                        {(suggestion.price || 0).toLocaleString('da-DK')} kr
                       </span>
                     </div>
                     <span className="text-xs text-muted-foreground block mt-0.5">

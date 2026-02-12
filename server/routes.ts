@@ -758,10 +758,16 @@ export async function registerRoutes(
       if (!q || q.length < 2) return res.json({ suggestions: [] });
 
       const results = await storage.searchProducts(q);
+      // Return full objects for the search bar, deduplicated by ID
       const suggestions = results
-        .map(p => p.name)
-        .filter((v, i, a) => a.indexOf(v) === i)
-        .slice(0, 8);
+        .slice(0, 8)
+        .map(p => ({
+          id: p.id,
+          name: p.name,
+          brand: p.brand,
+          price: p.price,
+          isHighMargin: p.isHighMargin
+        }));
 
       res.json({ suggestions });
     } catch (error) {

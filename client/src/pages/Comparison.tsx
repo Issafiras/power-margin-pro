@@ -65,7 +65,7 @@ export default function Comparison() {
 
     // Comparison Rows Config
     const rows = [
-        { label: "Pris", render: (p: ProductWithMargin) => <span className="font-bold text-lg">{p.price.toLocaleString("da-DK")} kr</span> },
+        { label: "Pris", render: (p: ProductWithMargin) => <span className="font-bold text-lg">{(p.price || 0).toLocaleString("da-DK")} kr</span> },
         { label: "Mærke", render: (p: ProductWithMargin) => p.brand },
         { label: "CPU", render: (p: ProductWithMargin) => p.specs?.cpu || "-" },
         { label: "RAM", render: (p: ProductWithMargin) => p.specs?.ram || "-" },
