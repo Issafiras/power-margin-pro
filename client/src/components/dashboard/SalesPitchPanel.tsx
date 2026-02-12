@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { CheckCircle2, Flame, Gift, AlertTriangle, Shield, Trophy, Target } from "lucide-react";
+import { CheckCircle2, Flame, Trophy, Target } from "lucide-react";
 import type { ProductWithMargin } from "@shared/schema";
 import { formatPrice } from "@/lib/specExtractor";
 
@@ -9,102 +9,40 @@ interface SalesPitchPanelProps {
 }
 
 export function SalesPitchPanel({ mainProduct, topPick }: SalesPitchPanelProps) {
-    // State for AI pitches
-    const [aiPitches, setAiPitches] = useState<{ valuePitch?: string; lossAversionPitch?: string; futureProofingPitch?: string } | null>(null);
+    // State for AI summary
+    const [aiSummary, setAiSummary] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
-    // Fetch AI pitches on mount
+    // Fetch Power.dk AI Summary
     useEffect(() => {
-        const fetchPitches = async () => {
+        const fetchSummary = async () => {
+            if (!mainProduct?.id || !topPick?.id) return;
+
             setIsLoading(true);
             try {
-                const response = await fetch("/api/generate-pitch", {
+                // Use the new AI Compare Proxy
+                const response = await fetch("/api/ai-compare", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ mainProduct, topPick }),
+                    body: JSON.stringify({ ids: [mainProduct.id, topPick.id] }),
                 });
 
                 if (response.ok) {
                     const data = await response.json();
-                    setAiPitches(data);
+                    setAiSummary(data.summary);
                 } else {
-                    // Fallback to static logic on error (e.g. no key)
-                    console.warn("AI Pitch generation failed, using fallback");
+                    console.warn("AI Summary fetch failed");
                 }
             } catch (e) {
-                console.error("AI Pitch fetch error:", e);
+                console.error("AI Summary error:", e);
             } finally {
                 setIsLoading(false);
             }
         };
 
-        fetchPitches();
-    }, [mainProduct.id, topPick.id]); // Re-fetch if products change
+        fetchSummary();
+    }, [mainProduct.id, topPick.id]);
 
-    // Logic for Value Pitch (Fallback)
-    const getValuePitch = () => {
-        if (aiPitches?.valuePitch) return aiPitches.valuePitch;
-
-        const priceDiff = topPick.priceDifference || 0;
-        const dailyCost = Math.round(priceDiff / 365);
-        const upgrades: string[] = [];
-
-        if ((topPick.specs?.ramGB || 0) > (mainProduct.specs?.ramGB || 0)) {
-            const ramDiff = (topPick.specs?.ramGB || 0) - (mainProduct.specs?.ramGB || 0);
-            upgrades.push(`${ramDiff}GB ekstra RAM`);
-        }
-        if ((topPick.specs?.storageGB || 0) > (mainProduct.specs?.storageGB || 0)) {
-            upgrades.push(`større SSD (${topPick.specs?.storage})`);
-        }
-        if ((topPick.specs?.cpuTier || 0) > (mainProduct.specs?.cpuTier || 0)) {
-            upgrades.push('kraftigere processor');
-        }
-
-        const upgradeText = upgrades.slice(0, 2).join(' og ');
-        if (priceDiff > 0 && priceDiff < 500) {
-            return `For kun ${priceDiff} kr mere – mindre end en kop kaffe om dagen – får du ${upgradeText}. Det er en no-brainer!`;
-        } else if (priceDiff > 0) {
-            return `For ${dailyCost} kr om dagen i et år får du ${upgradeText || 'en meget bedre computer'}. Den investering tjener sig selv hjem i produktivitet!`;
-        } else {
-            return `Du SPARER ${Math.abs(priceDiff)} kr OG får ${upgradeText || 'bedre specs'}. Det er win-win!`;
-        }
-    };
-
-    // Logic for Loss Aversion Pitch (Fallback)
-    const getLossAversionPitch = () => {
-        if (aiPitches?.lossAversionPitch) return aiPitches.lossAversionPitch;
-
-        const issues: string[] = [];
-
-        if ((mainProduct.specs?.ramGB || 0) < 16) {
-            issues.push('8GB RAM bliver hurtigt for lidt med mange browser-tabs');
-        }
-        if ((mainProduct.specs?.storageGB || 0) < 512) {
-            issues.push('Windows-opdateringer fylder mere og mere');
-        }
-        if ((mainProduct.specs?.cpuTier || 0) < 6) {
-            issues.push('en budget-processor der føles langsom om 1-2 år');
-        }
-
-        if (issues.length === 0) {
-            return 'Denne er faktisk et godt valg, men anbefalingen giver dig ekstra fremtidssikring!';
-        }
-
-        return `Mange kunder der vælger den billige model kommer tilbage og siger: '${issues[0]}'. Med anbefalingen undgår du den frustration.`;
-    };
-
-    // Logic for Future Proofing Pitch (Fallback)
-    const getFutureProofingPitch = () => {
-        if (aiPitches?.futureProofingPitch) return aiPitches.futureProofingPitch;
-
-        const years = 5;
-        const yearlyCost = Math.round((topPick.priceDifference || 0) / years);
-
-        if ((topPick.specs?.ramGB || 0) >= 16 && (topPick.specs?.storageGB || 0) >= 512) {
-            return `Med ${topPick.specs?.ram} RAM og ${topPick.specs?.storage} SSD holder denne computer ${years} år uden problemer. Det er kun ${yearlyCost > 0 ? yearlyCost + ' kr/år mere' : 'gratis opgradering'} for at undgå at købe ny om 2-3 år.`;
-        }
-        return `Denne computer er bygget til at holde ${years}+ år. Du slipper for at bekymre dig om udskiftning længe.`;
-    };
 
     return (
         <div className="pt-3 mt-2 border-t border-primary/40 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-xl p-4 space-y-4 animate-fade-in">
@@ -142,52 +80,28 @@ export function SalesPitchPanel({ mainProduct, topPick }: SalesPitchPanelProps) 
 
             {/* PITCHES */}
             <div className="space-y-3">
-                {/* Check if we have a Power.dk AI Summary (Scraped) */}
-                {(aiPitches as any)?.source === "Power.dk" && (aiPitches?.valuePitch) ? (
+                {/* AI Generated Listing (replacing old pitches) */}
+                {isLoading ? (
+                    <div className="bg-white/5 rounded-lg p-3 animate-pulse">
+                        <div className="h-2 w-3/4 bg-white/10 rounded mb-2"></div>
+                        <div className="h-2 w-full bg-white/10 rounded mb-2"></div>
+                        <div className="h-2 w-5/6 bg-white/10 rounded"></div>
+                    </div>
+                ) : aiSummary ? (
                     <div className="bg-gradient-to-r from-purple-500/10 to-transparent rounded-lg p-3 border-l-2 border-purple-500 hover:bg-purple-500/[0.15] transition-colors cursor-default">
                         <p className="text-[10px] text-purple-400 uppercase tracking-wider mb-1 flex items-center gap-1.5 font-semibold">
                             <Flame className="h-3 w-3" />
-                            Power.dk AI Sammenligning
+                            Power.dk Vurdering
                         </p>
-                        <div className="text-sm text-foreground/90 leading-relaxed italic border-l-2 border-purple-500/20 pl-2 whitespace-pre-wrap">
-                            {aiPitches.valuePitch}
-                        </div>
+                        <div
+                            className="text-sm text-foreground/90 leading-relaxed border-l-2 border-purple-500/20 pl-2 prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>h3]:text-sm [&>h3]:font-bold [&>h3]:mt-2"
+                            dangerouslySetInnerHTML={{ __html: aiSummary }}
+                        />
                     </div>
                 ) : (
-                    <>
-                        {/* Value Pitch */}
-                        <div className="bg-gradient-to-r from-green-500/10 to-transparent rounded-lg p-3 border-l-2 border-green-500 hover:bg-green-500/[0.15] transition-colors cursor-default">
-                            <p className="text-[10px] text-green-400 uppercase tracking-wider mb-1 flex items-center gap-1.5 font-semibold">
-                                <Gift className="h-3 w-3" />
-                                Værdi-pitch
-                            </p>
-                            <p className="text-sm text-foreground/90 leading-relaxed italic border-l-2 border-green-500/20 pl-2">
-                                "{getValuePitch()}"
-                            </p>
-                        </div>
-
-                        {/* Loss Aversion Pitch */}
-                        <div className="bg-gradient-to-r from-red-500/10 to-transparent rounded-lg p-3 border-l-2 border-red-500 hover:bg-red-500/[0.15] transition-colors cursor-default">
-                            <p className="text-[10px] text-red-400 uppercase tracking-wider mb-1 flex items-center gap-1.5 font-semibold">
-                                <AlertTriangle className="h-3 w-3" />
-                                Undgå-fortrydelse pitch
-                            </p>
-                            <p className="text-sm text-foreground/90 leading-relaxed italic border-l-2 border-red-500/20 pl-2">
-                                "{getLossAversionPitch()}"
-                            </p>
-                        </div>
-
-                        {/* Future Proofing Pitch */}
-                        <div className="bg-gradient-to-r from-blue-500/10 to-transparent rounded-lg p-3 border-l-2 border-blue-500 hover:bg-blue-500/[0.15] transition-colors cursor-default">
-                            <p className="text-[10px] text-blue-400 uppercase tracking-wider mb-1 flex items-center gap-1.5 font-semibold">
-                                <Shield className="h-3 w-3" />
-                                Fremtidssikring pitch
-                            </p>
-                            <p className="text-sm text-foreground/90 leading-relaxed italic border-l-2 border-blue-500/20 pl-2">
-                                "{getFutureProofingPitch()}"
-                            </p>
-                        </div>
-                    </>
+                    <div className="text-sm text-muted-foreground italic text-center p-2">
+                        Kunne ikke hente salgsscript fra Power.dk
+                    </div>
                 )}
             </div>
 
