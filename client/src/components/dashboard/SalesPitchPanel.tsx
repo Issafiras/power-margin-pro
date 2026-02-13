@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { CheckCircle2, Flame, Trophy, Target } from "lucide-react";
+import { CheckCircle2, Flame, Trophy, Target, Sparkles, AlertCircle, ChevronRight, MessageCircle } from "lucide-react";
 import type { ProductWithMargin } from "@shared/schema";
 import { formatPrice } from "@/lib/specExtractor";
+import { cn } from "@/lib/utils";
 
 interface SalesPitchPanelProps {
     mainProduct: ProductWithMargin;
@@ -9,18 +10,16 @@ interface SalesPitchPanelProps {
 }
 
 export function SalesPitchPanel({ mainProduct, topPick }: SalesPitchPanelProps) {
-    // State for AI summary
     const [aiSummary, setAiSummary] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [activeObjection, setActiveObjection] = useState<string | null>(null);
 
-    // Fetch Power.dk AI Summary
     useEffect(() => {
         const fetchSummary = async () => {
             if (!mainProduct?.id || !topPick?.id) return;
 
             setIsLoading(true);
             try {
-                // Use the new AI Compare Proxy
                 const response = await fetch("/api/ai-compare", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -43,92 +42,161 @@ export function SalesPitchPanel({ mainProduct, topPick }: SalesPitchPanelProps) 
         fetchSummary();
     }, [mainProduct.id, topPick.id]);
 
+    const objections = [
+        {
+            id: "price",
+            trigger: "For dyr",
+            response: `Regnet per dag over 3 år er det kun ${Math.round((topPick.priceDifference || 0) / 1095)} kr ekstra for en markant bedre oplevelse.`
+        },
+        {
+            id: "need",
+            trigger: "Behøver ikke",
+            response: "De fleste siger det - indtil de opdager at Chrome og tunge hjemmesider hurtigt sluger al memory på den billige model."
+        }
+    ];
 
     return (
-        <div className="pt-3 mt-2 border-t border-primary/40 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent rounded-xl p-4 space-y-4 animate-fade-in">
+        <section
+            aria-label="Salgsargumenter"
+            className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl shadow-2xl transition-all duration-500 hover:shadow-primary/5 hover:border-primary/20"
+        >
+            {/* Ambient Background Gradient */}
+            <div className="absolute top-0 right-0 -z-10 h-[200px] w-[200px] bg-primary/20 blur-[100px] opacity-20 group-hover:opacity-30 transition-opacity duration-700" />
 
-            {/* URGENCY + ANCHORING */}
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-green-500/20 text-green-400 text-xs font-bold animate-pulse shadow-sm shadow-green-500/10">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        På lager
+            <div className="p-5 space-y-6">
+                {/* HEADER AREA */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-gradient-to-br from-amber-500/20 to-orange-600/20 ring-1 ring-amber-500/20 shadow-lg shadow-amber-500/5">
+                            <Trophy className="h-4 w-4 text-amber-400" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-bold text-foreground tracking-wide flex items-center gap-2">
+                                SÆLGER SCRIPTS
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-gradient-to-r from-primary to-purple-600 text-white shadow-sm">AI POWERED</span>
+                            </h3>
+                            <p className="text-[10px] text-muted-foreground font-medium">Overbevis kunden med data</p>
+                        </div>
                     </div>
-                    {topPick.isHighMargin && (
-                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/20 text-amber-400 text-xs font-semibold shadow-sm shadow-amber-500/10">
-                            <Flame className="h-3.5 w-3.5" />
-                            Populær
+
+                    {/* STATUS BADGES */}
+                    <div className="flex gap-2">
+                        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold shadow-sm backdrop-blur-md">
+                            <CheckCircle2 className="h-3 w-3" />
+                            På lager
+                        </div>
+                        {topPick.isHighMargin && (
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold shadow-sm backdrop-blur-md animate-pulse">
+                                <Flame className="h-3 w-3" />
+                                High Margin
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* PRICE ANCHORING - VISUALIZED */}
+                {topPick.originalPrice && topPick.originalPrice > topPick.price && (
+                    <div className="relative overflow-hidden rounded-xl bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-transparent p-3 border border-green-500/10">
+                        <div className="flex justify-between items-center relative z-10">
+                            <div className="flex flex-col">
+                                <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Normalpris</span>
+                                <span className="text-xs font-mono text-muted-foreground line-through decoration-red-400/50">{formatPrice(topPick.originalPrice)}</span>
+                            </div>
+                            <div className="h-8 w-[1px] bg-border/50 mx-2"></div>
+                            <div className="flex flex-col items-end">
+                                <span className="text-[10px] text-green-400 font-bold uppercase tracking-wider animate-pulse">Du sparer kunden</span>
+                                <span className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-300">
+                                    {formatPrice(topPick.originalPrice - topPick.price)}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* AI PITCH CONTENT */}
+                <div className="space-y-3">
+                    <div className="flex items-center gap-2 mb-1">
+                        <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                        <span className="text-xs font-semibold text-purple-300">Power.dk Analyse</span>
+                    </div>
+
+                    {isLoading ? (
+                        <div className="space-y-2 animate-pulse p-4 rounded-xl bg-white/5 border border-white/5">
+                            <div className="h-2 w-3/4 bg-white/10 rounded"></div>
+                            <div className="h-2 w-full bg-white/10 rounded"></div>
+                            <div className="h-2 w-5/6 bg-white/10 rounded"></div>
+                        </div>
+                    ) : aiSummary ? (
+                        <div className="relative p-4 rounded-xl bg-gradient-to-br from-white/5 to-transparent border border-white/10 hover:border-purple-500/30 transition-colors group/summary">
+                            <div
+                                className="prose prose-invert prose-sm max-w-none text-xs text-muted-foreground leading-relaxed [&>p]:mb-2 [&>strong]:text-foreground [&>strong]:font-bold"
+                                dangerouslySetInnerHTML={{ __html: aiSummary }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center p-6 text-center rounded-xl border border-dashed border-white/10 bg-white/5">
+                            <AlertCircle className="h-5 w-5 text-muted-foreground mb-2" />
+                            <p className="text-xs text-muted-foreground">Kunne ikke hente salgsscript.</p>
                         </div>
                     )}
                 </div>
-                {/* ANCHORING */}
-                {topPick.originalPrice && topPick.originalPrice > topPick.price && (
-                    <div className="text-right">
-                        <p className="text-[10px] text-muted-foreground line-through font-mono">{formatPrice(topPick.originalPrice)}</p>
-                        <p className="text-xs font-bold text-green-400">Spar {formatPrice(topPick.originalPrice - topPick.price)}!</p>
-                    </div>
-                )}
-            </div>
 
-            {/* HEADER */}
-            <div className="flex items-center gap-2 mb-2">
-                <Trophy className="h-4 w-4 text-amber-400 drop-shadow-md" />
-                <p className="text-[11px] text-primary uppercase tracking-[0.15em] font-bold">
-                    Sælger Scripts
-                </p>
-            </div>
+                {/* INTERACTIVE OBJECTION HANDLERS */}
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 mb-1">
+                        <MessageCircle className="h-3.5 w-3.5 text-blue-400" />
+                        <span className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Indvendingsbehandling</span>
+                    </div>
+                    <div className="grid gap-2">
+                        {objections.map((obj) => (
+                            <button
+                                key={obj.id}
+                                onClick={() => setActiveObjection(activeObjection === obj.id ? null : obj.id)}
+                                className={cn(
+                                    "text-left w-full p-3 rounded-lg border transition-all duration-300 outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                                    activeObjection === obj.id
+                                        ? "bg-primary/10 border-primary/40 shadow-[0_0_15px_-3px_rgba(var(--primary),0.2)]"
+                                        : "bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10"
+                                )}
+                                aria-expanded={activeObjection === obj.id}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <span className={cn(
+                                        "text-xs font-bold transition-colors",
+                                        activeObjection === obj.id ? "text-primary" : "text-red-300"
+                                    )}>
+                                        "{obj.trigger}"
+                                    </span>
+                                    <ChevronRight className={cn(
+                                        "h-3 w-3 text-muted-foreground transition-transform duration-300",
+                                        activeObjection === obj.id && "rotate-90 text-primary"
+                                    )} />
+                                </div>
+                                <div className={cn(
+                                    "grid transition-[grid-template-rows] duration-300 ease-out",
+                                    activeObjection === obj.id ? "grid-rows-[1fr] mt-2 opacity-100" : "grid-rows-[0fr] opacity-0"
+                                )}>
+                                    <div className="overflow-hidden">
+                                        <p className="text-xs text-foreground/90 italic leading-relaxed pl-2 border-l-2 border-primary/30">
+                                            "{obj.response}"
+                                        </p>
+                                    </div>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
-            {/* PITCHES */}
-            <div className="space-y-3">
-                {/* AI Generated Listing (replacing old pitches) */}
-                {isLoading ? (
-                    <div className="bg-white/5 rounded-lg p-3 animate-pulse">
-                        <div className="h-2 w-3/4 bg-white/10 rounded mb-2"></div>
-                        <div className="h-2 w-full bg-white/10 rounded mb-2"></div>
-                        <div className="h-2 w-5/6 bg-white/10 rounded"></div>
-                    </div>
-                ) : aiSummary ? (
-                    <div className="bg-gradient-to-r from-purple-500/10 to-transparent rounded-lg p-3 border-l-2 border-purple-500 hover:bg-purple-500/[0.15] transition-colors cursor-default">
-                        <p className="text-[10px] text-purple-400 uppercase tracking-wider mb-1 flex items-center gap-1.5 font-semibold">
-                            <Flame className="h-3 w-3" />
-                            Power.dk Vurdering
-                        </p>
-                        <div
-                            className="text-sm text-foreground/90 leading-relaxed border-l-2 border-purple-500/20 pl-2 prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>ul]:list-disc [&>ul]:pl-4 [&>h3]:text-sm [&>h3]:font-bold [&>h3]:mt-2"
-                            dangerouslySetInnerHTML={{ __html: aiSummary }}
-                        />
-                    </div>
-                ) : (
-                    <div className="text-sm text-muted-foreground italic text-center p-2">
-                        Kunne ikke hente salgsscript fra Power.dk
-                    </div>
-                )}
-            </div>
-
-            {/* QUICK OBJECTION HANDLERS */}
-            <div className="pt-3 border-t border-white/5">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2 font-medium">Hvis kunden siger...</p>
-                <div className="grid grid-cols-1 gap-2 text-xs">
-                    <div className="flex gap-2 items-center group">
-                        <span className="text-red-400 font-medium whitespace-nowrap bg-red-400/10 px-1.5 py-0.5 rounded group-hover:bg-red-400/20 transition-colors">"For dyr"</span>
-                        <span className="text-muted-foreground">→</span>
-                        <span className="text-foreground/80 italic">"Regnet per dag over 3 år er det kun {Math.round((topPick.priceDifference || 0) / 1095)} kr ekstra"</span>
-                    </div>
-                    <div className="flex gap-2 items-center group">
-                        <span className="text-red-400 font-medium whitespace-nowrap bg-red-400/10 px-1.5 py-0.5 rounded group-hover:bg-red-400/20 transition-colors">"Behøver ikke"</span>
-                        <span className="text-muted-foreground">→</span>
-                        <span className="text-foreground/80 italic">"De fleste siger det - indtil de opdager at Chrome sluger al RAM 😅"</span>
+                {/* BOTTOM CTA */}
+                <div className="relative overflow-hidden rounded-lg bg-gradient-to-r from-primary/20 via-primary/10 to-transparent p-0.5">
+                    <div className="relative flex items-center justify-center gap-2 bg-background/40 backdrop-blur-sm p-2 rounded-[7px]">
+                        <Target className="h-3.5 w-3.5 text-primary animate-bounce-subtle" />
+                        <span className="text-[10px] font-bold text-foreground tracking-wide uppercase">
+                            {topPick.isHighMargin ? 'Absolut bedste valg for butikken' : 'Solid opgradering for kunden'}
+                        </span>
                     </div>
                 </div>
             </div>
-
-            {/* SKRIPT AFSLUTNING */}
-            <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-full bg-primary/20 border border-primary/30 text-center mt-2 shadow-lg shadow-primary/5 animate-pulse-subtle">
-                <Target className="h-4 w-4 text-primary" />
-                <span className="text-xs font-bold text-primary tracking-wide">
-                    {topPick.isHighMargin ? '⭐ Sælger favorit!' : 'Godt alternativ til kunden'}
-                </span>
-            </div>
-        </div>
+        </section>
     );
 }
