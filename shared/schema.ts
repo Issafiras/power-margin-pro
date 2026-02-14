@@ -85,3 +85,16 @@ export type InsertUser = {
 export type User = InsertUser & { id: string };
 
 
+
+// GPU Benchmarks table
+export const gpuBenchmarks = pgTable("gpu_benchmarks", {
+  id: text("id").primaryKey(), // We can use the GPU name as ID or a slug
+  gpuName: text("gpu_name").notNull().unique(),
+  score: real("score").notNull(), // 3DMark Time Spy Graphics Score
+  url: text("url"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertGpuBenchmarkSchema = createInsertSchema(gpuBenchmarks).omit({ updatedAt: true });
+export type InsertGpuBenchmark = z.infer<typeof insertGpuBenchmarkSchema>;
+export type DbGpuBenchmark = typeof gpuBenchmarks.$inferSelect;

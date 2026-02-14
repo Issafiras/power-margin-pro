@@ -33,6 +33,7 @@ if (!process.env.DATABASE_URL) {
   db = drizzle(client, { schema });
 }
 
+
 export const dbConfigured = !!process.env.DATABASE_URL;
 
 export { client, db };

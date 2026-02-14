@@ -2,9 +2,9 @@ import type { Express } from "express";
 import type { Server } from "http";
 import axios from "axios";
 import { storage } from "./storage";
-import type { InsertProduct, ProductWithMargin } from "../shared/schema";
+import { type InsertProduct, type ProductWithMargin, gpuBenchmarks } from "../shared/schema";
 import { db, dbConfigured } from "./db";
-import { sql } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 
 const POWER_API_BASE = "https://www.power.dk/api/v2/productlists";
 const LAPTOP_CATEGORY_ID = 1341;
@@ -34,6 +34,37 @@ interface ExtractedSpecs {
   screenResolution?: string;
   features?: string[];
   os?: string;
+}
+
+
+// GPU Score Cache
+const gpuScoreCache = new Map<string, number>();
+
+function normalizeGpuName(name: string): string {
+  return name.toLowerCase()
+    .replace(/(?:nvidia|amd|intel|geforce|radeon|graphics|mobile|laptop|gpu)/g, "")
+    .replace(/with\s+max-q\s+design/g, "")
+    .replace(/max-q/g, "")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
+async function initializeGpuCache() {
+  if (!dbConfigured) {
+    console.warn("Skipping GPU cache init: Database not configured");
+    return;
+  }
+
+  try {
+    const benchmarks = await db.select().from(gpuBenchmarks);
+    benchmarks.forEach(b => {
+      if (b.gpuName && b.score) {
+        gpuScoreCache.set(normalizeGpuName(b.gpuName), b.score);
+      }
+    });
+  } catch (error) {
+    console.error("Error loading GPU benchmarks:", error);
+  }
 }
 
 // CPU Tier mapping based on buying guide (S=10, A=8, B=6, C=4, D=1)
@@ -92,13 +123,44 @@ function getCpuTier(cpuString: string): number {
 }
 
 function getGpuTier(gpuString: string): number {
+  if (!gpuString) return 0;
+
+  // Try to find score in cache
+  const normalizedInput = normalizeGpuName(gpuString);
+  let score = gpuScoreCache.get(normalizedInput);
+
+  // Fallback fuzzy matching if exact normalized match fails
+  if (score === undefined) {
+    for (const [key, value] of gpuScoreCache.entries()) {
+      if (key.includes(normalizedInput) || normalizedInput.includes(key)) {
+        score = value;
+        break;
+      }
+    }
+  }
+
+  // If we have a benchmark score, map it to a tier (1-10)
+  if (score !== undefined) {
+    // Mapping Time Spy Graphics Scores to Tiers (Approximate)
+    if (score > 18000) return 9; // RTX 4090/5090
+    if (score > 14000) return 8; // RTX 4080
+    if (score > 10000) return 7; // RTX 4070 / 3080
+    if (score > 8000) return 6;  // RTX 4060 / 3070
+    if (score > 6000) return 5;  // RTX 4050 / 3060
+    if (score > 3500) return 4;  // GTX 1650 / Arc A370M
+    if (score > 1500) return 3;  // MX550 / Radeon 680M
+    if (score > 800) return 2;   // Iris Xe / Vega 8
+    return 1;                    // Basic iGPU
+  }
+
+  // Fallback to legacy regex logic if no DB match found
   const gpu = gpuString.toLowerCase();
 
   // 50-series (Blackwell) - 2025 Flagships
-  if (/rtx\s*5090/i.test(gpu)) return 9; // Monster
-  if (/rtx\s*5080/i.test(gpu)) return 8; // Very high end
-  if (/rtx\s*5070/i.test(gpu)) return 7; // High end
-  if (/rtx\s*5060/i.test(gpu)) return 6; // Solid mid-range
+  if (/rtx\s*5090/i.test(gpu)) return 9;
+  if (/rtx\s*5080/i.test(gpu)) return 8;
+  if (/rtx\s*5070/i.test(gpu)) return 7;
+  if (/rtx\s*5060/i.test(gpu)) return 6;
 
   // 40-series
   if (/rtx\s*4090/i.test(gpu)) return 8;
@@ -635,6 +697,14 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+
+  // Initialize GPU Benchmark Cache
+  try {
+    await initializeGpuCache();
+    console.log(`GPU Cache initialized with ${gpuScoreCache.size} entries.`);
+  } catch (error) {
+    console.error("Failed to initialize GPU cache:", error);
+  }
 
   const requireDb = (req: any, res: any, next: any) => {
     if (!dbConfigured) {

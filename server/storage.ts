@@ -1,4 +1,4 @@
-import { type User, type InsertUser, products, type InsertProduct, type DbProduct, type ProductSpecs } from "../shared/schema";
+import { type User, type InsertUser, products, type InsertProduct, type DbProduct, type ProductSpecs, gpuBenchmarks, type InsertGpuBenchmark, type DbGpuBenchmark } from "../shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
@@ -13,6 +13,9 @@ export interface IStorage {
   getProductCount(): Promise<number>;
   getHighMarginCount(): Promise<number>;
   getProductById(id: string): Promise<DbProduct | undefined>;
+  upsertGpuBenchmarks(items: InsertGpuBenchmark[]): Promise<void>;
+  getGpuBenchmark(gpuName: string): Promise<DbGpuBenchmark | undefined>;
+  getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -61,6 +64,18 @@ export class MemStorage implements IStorage {
 
   async getProductById(_id: string): Promise<DbProduct | undefined> {
     throw new Error("MemStorage does not support products. Use DatabaseStorage.");
+  }
+
+  async upsertGpuBenchmarks(_items: InsertGpuBenchmark[]): Promise<void> {
+    throw new Error("MemStorage does not support GPU benchmarks. Use DatabaseStorage.");
+  }
+
+  async getGpuBenchmark(_gpuName: string): Promise<DbGpuBenchmark | undefined> {
+    throw new Error("MemStorage does not support GPU benchmarks. Use DatabaseStorage.");
+  }
+
+  async getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]> {
+    throw new Error("MemStorage does not support GPU benchmarks. Use DatabaseStorage.");
   }
 }
 
@@ -155,6 +170,34 @@ export class DatabaseStorage implements IStorage {
   async getProductById(id: string): Promise<DbProduct | undefined> {
     const result = await db.select().from(products).where(eq(products.id, id));
     return result[0];
+  }
+
+  async upsertGpuBenchmarks(items: InsertGpuBenchmark[]): Promise<void> {
+    if (items.length === 0) return;
+
+    await db
+      .insert(gpuBenchmarks)
+      .values(items)
+      .onConflictDoUpdate({
+        target: gpuBenchmarks.gpuName,
+        set: {
+          score: sql`excluded.score`,
+          url: sql`excluded.url`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
+  }
+
+  async getGpuBenchmark(gpuName: string): Promise<DbGpuBenchmark | undefined> {
+    const result = await db
+      .select()
+      .from(gpuBenchmarks)
+      .where(eq(gpuBenchmarks.gpuName, gpuName));
+    return result[0];
+  }
+
+  async getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]> {
+    return await db.select().from(gpuBenchmarks);
   }
 }
 
