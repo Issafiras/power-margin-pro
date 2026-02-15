@@ -10,6 +10,7 @@ await build({
     target: "node20", // Matching engines.node in package.json
     format: "esm",
     outfile: "dist/api/index.js",
+    define: { "process.env.NODE_ENV": '"production"' },
     external: [], // Bundle everything as requested to avoid missing modules
     logLevel: "info",
     banner: {
