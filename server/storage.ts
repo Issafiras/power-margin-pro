@@ -98,7 +98,6 @@ export class MemStorage implements IStorage {
     throw new Error("MemStorage does not support products. Use DatabaseStorage.");
   }
 }
-}
 
 export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
