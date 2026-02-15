@@ -1,14 +1,15 @@
 
 import "dotenv/config";
 import axios from "axios";
-import { storage } from "../server/storage";
+import { storage } from "./storage";
 import { InsertProduct } from "../shared/schema";
+import { fileURLToPath } from "url";
 
 const POWER_API_BASE = "https://www.power.dk/api/v2/productlists";
 const LAPTOP_CATEGORY_ID = 1341;
 const PAGE_SIZE = 40;
 
-// Internal Helpers (copied from routes.ts to avoid importing the whole app)
+// Internal Helpers
 function getCpuTier(cpuString: string): number {
     const cpu = cpuString.toLowerCase();
     if (/apple\s+m[34]\s*(max|ultra)/i.test(cpu)) return 10;
@@ -82,7 +83,7 @@ function extractSpecs(productName: string, salesArguments?: string): any {
     return specs;
 }
 
-async function syncProducts() {
+export async function syncProducts() {
     console.log("Starting product sync (Standalone Mode)...");
 
     if (!process.env.DATABASE_URL) {
@@ -138,7 +139,7 @@ async function syncProducts() {
                     imageUrl: imageUrl,
                     productUrl: p.url ? (p.url.startsWith("http") ? p.url : `https://www.power.dk${p.url}`) : "",
                     sku: p.barcode || p.elguideId,
-                    inStock: p.stockCount > 0 || p.canAddToCart,
+                    inStock: p.inStock > 0 || p.canAddToCart,
                     isHighMargin: isHighMargin,
                     marginReason: marginReason || null,
                     specs: specs,
@@ -163,4 +164,8 @@ async function syncProducts() {
     console.log(`Sync complete! Total: ${totalSynced}`);
 }
 
-syncProducts().catch(console.error);
+/*
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    syncProducts().catch(console.error);
+}
+*/

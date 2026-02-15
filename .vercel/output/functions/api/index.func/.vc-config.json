@@ -1,0 +1,6 @@
+{
+  "runtime": "nodejs20.x",
+  "handler": "index.mjs",
+  "maxDuration": 60,
+  "launcherType": "Nodejs"
+}

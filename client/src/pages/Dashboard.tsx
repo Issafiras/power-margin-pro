@@ -14,6 +14,7 @@ import { Sparkles } from "lucide-react";
 import type { SearchResponse } from "@shared/schema";
 import { MarginChart } from "@/components/dashboard/MarginChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
 
 const containerVariants = {
@@ -36,6 +37,13 @@ const itemVariants = {
       stiffness: 100
     }
   }
+};
+
+const pageVariants = {
+  initial: { opacity: 0, y: 10 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -10 },
+  transition: { duration: 0.2 }
 };
 
 interface SyncResult {
@@ -204,7 +212,15 @@ export default function Dashboard() {
     : topPick;
 
   return (
-    <div className="min-h-screen bg-background relative overflow-hidden font-sans">
+    <motion.div
+      {...pageVariants}
+      className="min-h-screen bg-background relative overflow-hidden font-sans"
+    >
+      <Helmet>
+        <title>Dashboard | Power Margin Pro</title>
+        <meta name="description" content="Søg efter produkter, se fortjeneste og find bedre alternativer." />
+      </Helmet>
+
       {/* Animated mesh gradient background */}
       <div className="fixed inset-0 pointer-events-none">
         <div className="absolute inset-0 bg-gradient-to-br from-orange-950/20 via-background to-amber-950/15" />
@@ -336,6 +352,6 @@ export default function Dashboard() {
           </p>
         </div>
       </footer>
-    </div>
+    </motion.div>
   );
 }

@@ -8,6 +8,15 @@ import { AiSummarySection } from "@/components/AiSummarySection"; // Import
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import type { ProductWithMargin } from "@shared/schema";
+import { Helmet } from "react-helmet-async";
+import { motion } from "framer-motion";
+
+const pageVariants = {
+    initial: { opacity: 0, x: 20 },
+    animate: { opacity: 1, x: 0 },
+    exit: { opacity: 0, x: -20 },
+    transition: { duration: 0.2 }
+};
 
 export default function Comparison() {
     const [location, setLocation] = useLocation();
@@ -37,10 +46,13 @@ export default function Comparison() {
 
     if (!idsParam || ids.length === 0) {
         return (
-            <div className="min-h-screen p-8 flex flex-col items-center justify-center text-center">
+            <motion.div {...pageVariants} className="min-h-screen p-8 flex flex-col items-center justify-center text-center">
+                <Helmet>
+                    <title>Sammenligning | Power Margin Pro</title>
+                </Helmet>
                 <h1 className="text-2xl font-bold mb-4 gradient-text">Ingen produkter valgt til sammenligning</h1>
                 <Button onClick={() => setLocation("/")}>Gå tilbage til Dashboard</Button>
-            </div>
+            </motion.div>
         );
     }
 
@@ -54,11 +66,14 @@ export default function Comparison() {
 
     if (error || !data) {
         return (
-            <div className="min-h-screen p-8 flex flex-col items-center justify-center text-center">
+            <motion.div {...pageVariants} className="min-h-screen p-8 flex flex-col items-center justify-center text-center">
+                <Helmet>
+                    <title>Fejl | Power Margin Pro</title>
+                </Helmet>
                 <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
                 <h1 className="text-xl font-bold mb-4 text-destructive">Fejl ved indlæsning af sammenligning</h1>
                 <Button onClick={() => setLocation("/")}>Gå tilbage</Button>
-            </div>
+            </motion.div>
         );
     }
 
@@ -78,7 +93,11 @@ export default function Comparison() {
     ];
 
     return (
-        <div className="min-h-screen p-4 md:p-8 space-y-8 bg-background/50 backdrop-blur-sm">
+        <motion.div {...pageVariants} className="min-h-screen p-4 md:p-8 space-y-8 bg-background/50 backdrop-blur-sm">
+            <Helmet>
+                <title>Sammenligning | Power Margin Pro</title>
+                <meta name="description" content="Sammenlign produkter side om side og find den bedste løsning for kunden." />
+            </Helmet>
             <div className="flex items-center justify-between">
                 <Button variant="ghost" onClick={() => setLocation("/")} className="gap-2">
                     <ArrowLeft className="h-4 w-4" /> Tilbage
@@ -163,6 +182,6 @@ export default function Comparison() {
                     </TableBody>
                 </Table>
             </div>
-        </div>
+        </motion.div>
     );
 }
