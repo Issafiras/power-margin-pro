@@ -16,6 +16,10 @@ export interface IStorage {
   upsertGpuBenchmarks(items: InsertGpuBenchmark[]): Promise<void>;
   getGpuBenchmark(gpuName: string): Promise<DbGpuBenchmark | undefined>;
   getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]>;
+  upsertGpuBenchmarks(items: InsertGpuBenchmark[]): Promise<void>;
+  getGpuBenchmark(gpuName: string): Promise<DbGpuBenchmark | undefined>;
+  getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]>;
+  clearProducts(): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -76,6 +80,10 @@ export class MemStorage implements IStorage {
 
   async getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]> {
     throw new Error("MemStorage does not support GPU benchmarks. Use DatabaseStorage.");
+  }
+
+  async clearProducts(): Promise<void> {
+    throw new Error("MemStorage does not support products. Use DatabaseStorage.");
   }
 }
 
@@ -198,6 +206,10 @@ export class DatabaseStorage implements IStorage {
 
   async getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]> {
     return await db.select().from(gpuBenchmarks);
+  }
+
+  async clearProducts(): Promise<void> {
+    await db.delete(products);
   }
 }
 

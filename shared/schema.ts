@@ -98,3 +98,18 @@ export const gpuBenchmarks = pgTable("gpu_benchmarks", {
 export const insertGpuBenchmarkSchema = createInsertSchema(gpuBenchmarks).omit({ updatedAt: true });
 export type InsertGpuBenchmark = z.infer<typeof insertGpuBenchmarkSchema>;
 export type DbGpuBenchmark = typeof gpuBenchmarks.$inferSelect;
+
+// CPU Benchmarks table
+export const cpuBenchmarks = pgTable("cpu_benchmarks", {
+  id: text("id").primaryKey(), // CPU name normalized or slug
+  cpuName: text("cpu_name").notNull().unique(),
+  score: real("score").notNull(), // PassMark / CPU Mark
+  rank: real("rank"),
+  samples: real("samples"),
+  url: text("url"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertCpuBenchmarkSchema = createInsertSchema(cpuBenchmarks).omit({ updatedAt: true });
+export type InsertCpuBenchmark = z.infer<typeof insertCpuBenchmarkSchema>;
+export type DbCpuBenchmark = typeof cpuBenchmarks.$inferSelect;

@@ -2,7 +2,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import axios from "axios";
 import { storage } from "./storage";
-import { type InsertProduct, type ProductWithMargin, gpuBenchmarks } from "../shared/schema";
+import { type InsertProduct, type ProductWithMargin, gpuBenchmarks, cpuBenchmarks } from "../shared/schema";
 import { db, dbConfigured } from "./db";
 import { sql, eq } from "drizzle-orm";
 
@@ -39,6 +39,17 @@ interface ExtractedSpecs {
 
 // GPU Score Cache
 const gpuScoreCache = new Map<string, number>();
+// CPU Score Cache
+const cpuScoreCache = new Map<string, number>();
+
+function normalizeCpuName(name: string): string {
+  return name.toLowerCase()
+    .replace(/(?:intel|amd|apple|qualcomm|snapdragon|processor|cpu)/g, "")
+    .replace(/core/g, "") // "core i5" -> "i5"
+    .replace(/ryzen/g, "") // "ryzen 7" -> "7"
+    .replace(/\s+/g, "")
+    .trim();
+}
 
 function normalizeGpuName(name: string): string {
   return name.toLowerCase()
@@ -67,9 +78,69 @@ async function initializeGpuCache() {
   }
 }
 
+async function initializeCpuCache() {
+  if (!dbConfigured) {
+    console.warn("Skipping CPU cache init: Database not configured");
+    return;
+  }
+
+  try {
+    // Select only what we need to save memory
+    const benchmarks = await db.select({
+      name: cpuBenchmarks.cpuName,
+      score: cpuBenchmarks.score
+    }).from(cpuBenchmarks);
+
+    benchmarks.forEach(b => {
+      if (b.name && b.score) {
+        // Store both raw and normalized? Or just normalized to save space?
+        // Let's store normalized for fuzzy matching
+        cpuScoreCache.set(normalizeCpuName(b.name), b.score);
+      }
+    });
+    console.log(`Loaded ${benchmarks.length} CPU benchmarks into cache.`);
+  } catch (error) {
+    console.error("Error loading CPU benchmarks:", error);
+  }
+}
+
 // CPU Tier mapping based on buying guide (S=10, A=8, B=6, C=4, D=1)
 function getCpuTier(cpuString: string): number {
   const cpu = cpuString.toLowerCase();
+
+  // 1. Try Benchmark Cache first
+  if (cpuScoreCache.size > 0) {
+    const normalized = normalizeCpuName(cpuString);
+    let score = cpuScoreCache.get(normalized);
+
+    // Simple fuzzy lookup if exact match fails
+    if (!score) {
+      for (const [key, val] of cpuScoreCache.entries()) {
+        // careful with short keys matching everything
+        if (key.length > 3 && (normalized.includes(key) || key.includes(normalized))) {
+          score = val;
+          break;
+        }
+      }
+    }
+
+    if (score) {
+      // Map PassMark score to Tier (1-10)
+      // Calibrated for Laptop/Desktop mix (approximate)
+      if (score > 35000) return 10; // S-Tier Data Center / Top Enthusiast
+      if (score > 28000) return 9; // High-end i9/R9
+      if (score > 22000) return 8; // High-end i7/R7 (A-Tier)
+      if (score > 18000) return 7;
+      if (score > 14000) return 6; // Mid-range i5/R5 (B-Tier - Sweet Spot)
+      if (score > 10000) return 5;
+      if (score > 6000) return 4; // Budget i3/R3 (C-Tier)
+      if (score > 4000) return 3;
+      if (score > 2000) return 2;
+      return 1; // D-Tier
+    }
+  }
+
+  // 2. Fallback to Regex Heuristics if no benchmark found
 
   // Tier D (Avoid!) - Score 1
   if (/celeron|pentium|athlon|amd\s+a\d|intel\s+n\d{2,4}/i.test(cpu)) return 1;
@@ -698,10 +769,11 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // Initialize GPU Benchmark Cache
+  // Initialize Caches
   try {
     await initializeGpuCache();
-    console.log(`GPU Cache initialized with ${gpuScoreCache.size} entries.`);
+    await initializeCpuCache();
+    console.log(`GPU Cache: ${gpuScoreCache.size} | CPU Cache: ${cpuScoreCache.size}`);
   } catch (error) {
     console.error("Failed to initialize GPU cache:", error);
   }
@@ -747,6 +819,12 @@ export async function registerRoutes(
         "Accept": "application/json",
         "Referer": "https://www.power.dk/",
       };
+
+      // If this is the first batch, clear the database to ensure full sync
+      if (from === 0) {
+        console.log("Starting full sync: Clearing existing products from database...");
+        await storage.clearProducts();
+      }
 
       // Fetch from Power.dk category (Laptops = 1341)
       const url = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=${size}&from=${from}`;
