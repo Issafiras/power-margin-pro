@@ -67,12 +67,18 @@ async function initializeGpuCache() {
   }
 
   try {
-    const benchmarks = await db.select().from(gpuBenchmarks);
-    benchmarks.forEach(b => {
-      if (b.gpuName && b.score) {
-        gpuScoreCache.set(normalizeGpuName(b.gpuName), b.score);
+    // Select only what we need to save memory - performance optimization
+    const benchmarks = await db.select({
+      name: gpuBenchmarks.gpuName,
+      score: gpuBenchmarks.score
+    }).from(gpuBenchmarks);
+    
+    // Pre-normalize names during insertion to avoid repeated computation
+    for (const b of benchmarks) {
+      if (b.name && b.score) {
+        gpuScoreCache.set(normalizeGpuName(b.name), b.score);
       }
-    });
+    }
   } catch (error) {
     console.error("Error loading GPU benchmarks:", error);
   }
@@ -85,19 +91,18 @@ async function initializeCpuCache() {
   }
 
   try {
-    // Select only what we need to save memory
+    // Select only what we need to save memory - performance optimization
     const benchmarks = await db.select({
       name: cpuBenchmarks.cpuName,
       score: cpuBenchmarks.score
     }).from(cpuBenchmarks);
 
-    benchmarks.forEach(b => {
+    // Pre-normalize names during insertion to avoid repeated computation
+    for (const b of benchmarks) {
       if (b.name && b.score) {
-        // Store both raw and normalized? Or just normalized to save space?
-        // Let's store normalized for fuzzy matching
         cpuScoreCache.set(normalizeCpuName(b.name), b.score);
       }
-    });
+    }
     console.log(`Loaded ${benchmarks.length} CPU benchmarks into cache.`);
   } catch (error) {
     console.error("Error loading CPU benchmarks:", error);
@@ -769,13 +774,13 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
-  // Initialize Caches
+  // Initialize Caches (with performance optimization)
   try {
     await initializeGpuCache();
     await initializeCpuCache();
     console.log(`GPU Cache: ${gpuScoreCache.size} | CPU Cache: ${cpuScoreCache.size}`);
   } catch (error) {
-    console.error("Failed to initialize GPU cache:", error);
+    console.error("Failed to initialize GPU/CPU caches:", error);
   }
 
   const requireDb = (req: any, res: any, next: any) => {
