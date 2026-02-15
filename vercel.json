@@ -1,5 +1,20 @@
 {
     "version": 2,
-    "buildCommand": "npm run build",
-    "installCommand": "npm install"
+    "outputDirectory": "dist/public",
+    "functions": {
+        "dist/api/index.js": {
+            "includeFiles": "dist/public/**",
+            "maxDuration": 60
+        }
+    },
+    "rewrites": [
+        {
+            "source": "/api/(.*)",
+            "destination": "/dist/api/index"
+        },
+        {
+            "source": "/((?!api/.*).*)",
+            "destination": "/index.html"
+        }
+    ]
 }

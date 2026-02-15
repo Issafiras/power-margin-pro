@@ -72,7 +72,7 @@ async function initializeGpuCache() {
       name: gpuBenchmarks.gpuName,
       score: gpuBenchmarks.score
     }).from(gpuBenchmarks);
-    
+
     // Pre-normalize names during insertion to avoid repeated computation
     for (const b of benchmarks) {
       if (b.name && b.score) {
@@ -264,7 +264,7 @@ function getGpuTier(gpuString: string): number {
   return 0; // Unknown or integrated
 }
 
-function extractSpecs(productName: string, salesArguments?: string): ExtractedSpecs {
+export function extractSpecs(productName: string, salesArguments?: string): ExtractedSpecs {
   const specs: ExtractedSpecs = {};
 
   // Clean inputs
@@ -272,8 +272,9 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
   const cleanSalesArgs = (salesArguments || "").replace(/[™®]/g, '');
 
   // Combine product name and salesArguments for searching
+  // Prioritize salesArguments as it often contains the structured specs we need
   const searchText = cleanSalesArgs
-    ? `${cleanName}\n${cleanSalesArgs}`
+    ? `${cleanSalesArgs}\n${cleanName}`
     : cleanName;
 
   // Extract RAM from salesArguments first (most reliable source)
@@ -353,11 +354,22 @@ function extractSpecs(productName: string, salesArguments?: string): ExtractedSp
 
   // Extract GPU
   const gpuPatterns = [
-    /RTX\s*\d{4}(?:\s*Ti)?(?:\s*Super)?/i,
+    // RTX 50-series (Future proofing)
+    /RTX\s*50\d{2}(?:\s*Ti)?(?:\s*Super)?/i,
+    // RTX 40-series
+    /RTX\s*40\d{2}(?:\s*Ti)?(?:\s*Super)?/i,
+    // RTX 30-series
+    /RTX\s*30\d{2}(?:\s*Ti)?(?:\s*Super)?/i,
+    // GTX series
     /GTX\s*\d{4}(?:\s*Ti)?/i,
+    // Full names
     /GeForce\s+(?:RTX|GTX)\s*\d{4}(?:\s*Ti)?(?:\s*Super)?/i,
+    // AMD Radeon
     /Radeon\s+RX\s*\d{4}[A-Z]*/i,
-    /Intel\s+(?:Iris\s+Xe|Arc\s+[\dA-Z]+|UHD\s+Graphics)/i,
+    // Intel Arc
+    /Intel\s+Arc\s+[\dA-Z]+/i,
+    // Integrated
+    /Intel\s+(?:Iris\s+Xe|UHD\s+Graphics)/i,
     /AMD\s+Radeon\s+Graphics/i,
   ];
 
@@ -816,378 +828,151 @@ export async function registerRoutes(
   // Sync laptops from Power.dk (Paginated for Vercel Serverless)
   app.post("/api/sync", requireDb, async (req, res) => {
     try {
-      const from = parseInt(req.query.from as string) || 0;
-      const size = 30; // Small batch size for serverless limits
+      // Import the sync logic dynamically to ensure it uses the latest code
+      const { syncProducts } = await import("../../script/sync_db");
 
-      const headers = {
-        "User-Agent": getRandomUserAgent(),
-        "Accept": "application/json",
-        "Referer": "https://www.power.dk/",
-      };
+      // Start sync in background (fire and forget for this request, though Vercel might kill it if it takes too long)
+      // For Vercel, it's better to await it or use a proper background job, 
+      // but for this "Pro Max" optimization we'll await it to ensure completion.
+      console.log("Triggering manual sync via API...");
+      await syncProducts();
 
-      // If this is the first batch, clear the database to ensure full sync
-      if (from === 0) {
-        console.log("Starting full sync: Clearing existing products from database...");
-        await storage.clearProducts();
+      res.json({ success: true, message: "Sync completed successfully" });
+    } catch (error: any) {
+      console.error("Sync failed:", error);
+      res.status(500).json({ success: false, error: "Sync failed: " + error.message });
+    }
+  });
+}
+  });
+
+// Autocomplete suggestions endpoint
+app.get("/api/suggestions", async (req, res) => {
+  if (!dbConfigured) return res.json({ suggestions: [] });
+  try {
+    const q = req.query.q as string;
+    if (!q || q.length < 2) return res.json({ suggestions: [] });
+
+    const results = await storage.searchProducts(q);
+    // Return full objects for the search bar, deduplicated by ID
+    const suggestions = results
+      .slice(0, 8)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        brand: p.brand,
+        price: p.price,
+        isHighMargin: p.isHighMargin
+      }));
+
+    res.json({ suggestions });
+  } catch (error) {
+    console.error("Suggestions error:", error);
+    res.json({ suggestions: [] });
+  }
+});
+
+// Database status endpoint
+app.get("/api/db/status", async (req, res) => {
+  if (!dbConfigured) {
+    return res.json({
+      productCount: 0,
+      highMarginCount: 0,
+      hasProducts: false,
+      status: "not_configured",
+      message: "Database not connected. Please set DATABASE_URL."
+    });
+  }
+  try {
+    const count = await storage.getProductCount();
+    const highMarginCount = await storage.getHighMarginCount();
+    res.json({
+      productCount: count,
+      highMarginCount: highMarginCount,
+      hasProducts: count > 0,
+      status: "connected"
+    });
+  } catch (error: any) {
+    console.error("CRITICAL: DB status error:", error);
+    res.status(500).json({
+      error: "Database fejl: " + (error.message || "Ukendt fejl"),
+      details: error.toString(),
+      status: "error"
+    });
+  }
+});
+
+app.get("/api/search", async (req, res) => {
+  try {
+    const query = req.query.q as string;
+    const useDatabase = req.query.db === "true";
+
+    if (!query || query.trim().length === 0) {
+      return res.status(400).json({
+        error: "Søgeord er påkrævet",
+        products: [],
+        totalCount: 0,
+        searchQuery: ""
+      });
+    }
+
+    // Try database search first if db=true or if we have products in database
+    let dbProductCount = 0;
+    try {
+      if (dbConfigured) {
+        dbProductCount = await storage.getProductCount();
       }
+    } catch (dbErr) {
+      console.warn("DB product count check failed, falling back to API:", (dbErr as Error).message);
+    }
+    if (useDatabase && dbProductCount > 0) {
+      console.log(`Searching database for: ${query}`);
+      const dbResults = await storage.searchProducts(query);
 
-      // Fetch from Power.dk category (Laptops = 1341)
-      const url = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=${size}&from=${from}`;
-      console.log(`Syncing batch from ${from} (size ${size}):`, url);
-
-      const response = await axios.get(url, { headers, timeout: 20000 });
-      const data = response.data;
-      const rawProducts = data?.products || [];
-      const totalCount = data?.totalProductCount || 0;
-
-      if (rawProducts.length === 0) {
-        return res.json({
-          success: true,
-          syncedCount: 0,
-          totalCount,
-          hasMore: false,
-          message: "Ingen flere produkter at synkronisere."
-        });
-      }
-
-      const productsToUpsert: InsertProduct[] = rawProducts.map((p: any) => {
-        const name = p.title || "Ukendt produkt";
-        const brand = p.manufacturerName || "Ukendt";
-        const price = p.price || 0;
-        const marginInfo = isHighMarginProduct(brand, price);
-        const salesArgs = p.salesArguments || "";
-        const specs = extractSpecs(name, salesArgs);
-
-        let productUrl = p.url || "";
-        if (productUrl && !productUrl.startsWith("http")) {
-          productUrl = `https://www.power.dk${productUrl}`;
-        }
-
-        return {
-          id: p.productId?.toString() || `p-${Math.random().toString(36).substr(2, 9)}`,
-          name,
-          brand,
-          price,
-          originalPrice: p.previousPrice || null,
-          imageUrl: getImageUrl(p.productImage) || null,
-          productUrl,
-          sku: p.barcode || p.elguideId || null,
-          inStock: p.stockCount > 0 || p.canAddToCart,
-          isHighMargin: marginInfo.isHighMargin,
-          marginReason: marginInfo.reason || null,
-          specs: specs,
+      if (dbResults.length > 0) {
+        // Get the reference product from search results
+        const refItem = dbResults[0];
+        const reference = {
+          id: refItem.id,
+          name: refItem.name,
+          brand: refItem.brand,
+          price: refItem.price,
+          originalPrice: refItem.originalPrice ?? undefined,
+          imageUrl: refItem.imageUrl ?? undefined,
+          productUrl: refItem.productUrl,
+          sku: refItem.sku ?? undefined,
+          inStock: refItem.inStock ?? true,
+          isHighMargin: refItem.isHighMargin ?? false,
+          marginReason: refItem.marginReason ?? undefined,
+          specs: refItem.specs ?? {},
+          isTopPick: false,
+          priceDifference: 0,
+          upgradeScore: 0,
         };
-      });
 
-      await storage.upsertProducts(productsToUpsert);
-
-      const syncedCount = productsToUpsert.length;
-      const nextFrom = from + syncedCount;
-      const hasMore = nextFrom < totalCount;
-
-      res.json({
-        success: true,
-        syncedCount,
-        nextFrom,
-        hasMore,
-        totalCount,
-        message: `Synkroniserede ${syncedCount} produkter (total: ${nextFrom}/${totalCount})`
-      });
-
-    } catch (error: any) {
-      console.error("Sync API error:", error.message);
-      res.status(500).json({
-        success: false,
-        error: "Fejl ved synkronisering: " + error.message
-      });
-    }
-  });
-
-  // Autocomplete suggestions endpoint
-  app.get("/api/suggestions", async (req, res) => {
-    if (!dbConfigured) return res.json({ suggestions: [] });
-    try {
-      const q = req.query.q as string;
-      if (!q || q.length < 2) return res.json({ suggestions: [] });
-
-      const results = await storage.searchProducts(q);
-      // Return full objects for the search bar, deduplicated by ID
-      const suggestions = results
-        .slice(0, 8)
-        .map(p => ({
-          id: p.id,
-          name: p.name,
-          brand: p.brand,
-          price: p.price,
-          isHighMargin: p.isHighMargin
-        }));
-
-      res.json({ suggestions });
-    } catch (error) {
-      console.error("Suggestions error:", error);
-      res.json({ suggestions: [] });
-    }
-  });
-
-  // Database status endpoint
-  app.get("/api/db/status", async (req, res) => {
-    if (!dbConfigured) {
-      return res.json({
-        productCount: 0,
-        highMarginCount: 0,
-        hasProducts: false,
-        status: "not_configured",
-        message: "Database not connected. Please set DATABASE_URL."
-      });
-    }
-    try {
-      const count = await storage.getProductCount();
-      const highMarginCount = await storage.getHighMarginCount();
-      res.json({
-        productCount: count,
-        highMarginCount: highMarginCount,
-        hasProducts: count > 0,
-        status: "connected"
-      });
-    } catch (error: any) {
-      console.error("CRITICAL: DB status error:", error);
-      res.status(500).json({
-        error: "Database fejl: " + (error.message || "Ukendt fejl"),
-        details: error.toString(),
-        status: "error"
-      });
-    }
-  });
-
-  app.get("/api/search", async (req, res) => {
-    try {
-      const query = req.query.q as string;
-      const useDatabase = req.query.db === "true";
-
-      if (!query || query.trim().length === 0) {
-        return res.status(400).json({
-          error: "Søgeord er påkrævet",
-          products: [],
-          totalCount: 0,
-          searchQuery: ""
-        });
-      }
-
-      // Try database search first if db=true or if we have products in database
-      let dbProductCount = 0;
-      try {
-        if (dbConfigured) {
-          dbProductCount = await storage.getProductCount();
-        }
-      } catch (dbErr) {
-        console.warn("DB product count check failed, falling back to API:", (dbErr as Error).message);
-      }
-      if (useDatabase && dbProductCount > 0) {
-        console.log(`Searching database for: ${query}`);
-        const dbResults = await storage.searchProducts(query);
-
-        if (dbResults.length > 0) {
-          // Get the reference product from search results
-          const refItem = dbResults[0];
-          const reference = {
-            id: refItem.id,
-            name: refItem.name,
-            brand: refItem.brand,
-            price: refItem.price,
-            originalPrice: refItem.originalPrice ?? undefined,
-            imageUrl: refItem.imageUrl ?? undefined,
-            productUrl: refItem.productUrl,
-            sku: refItem.sku ?? undefined,
-            inStock: refItem.inStock ?? true,
-            isHighMargin: refItem.isHighMargin ?? false,
-            marginReason: refItem.marginReason ?? undefined,
-            specs: refItem.specs ?? {},
-            isTopPick: false,
-            priceDifference: 0,
-            upgradeScore: 0,
-          };
-
-          // Fetch ALL products from database to find alternatives (not just search results)
-          const allDbProducts = await storage.getAllProducts();
-          const referencePrice = reference.price;
-          const referenceSpecs = reference.specs as ExtractedSpecs;
-          // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
-          const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
-
-          // Filter to valid alternatives with RAM+Storage specs
-          const validDbProducts = allDbProducts.filter((p) => {
-            if (p.id === reference.id) return false;
-            if (p.price > maxPrice) return false;
-
-            const specs = p.specs as ExtractedSpecs | null;
-            if (!specs) return false;
-            if (!specs.ramGB || specs.ramGB === 0) return false;
-            if (!specs.storageGB || specs.storageGB === 0) return false;
-
-            // Enforce strict high-margin requirement for suggestions per user request (92/98/Cepter)
-            if (!p.isHighMargin) return false;
-
-            return true;
-          });
-
-          const scoredAlternatives = validDbProducts.map((p) => {
-            const specs = (p.specs as ExtractedSpecs) || {};
-            const priceDiff = p.price - referencePrice;
-            const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
-              specs,
-              referenceSpecs,
-              p.isHighMargin ?? false,
-              p.price,
-              referencePrice,
-              maxPrice
-            );
-
-            return {
-              id: p.id,
-              name: p.name,
-              brand: p.brand,
-              price: p.price,
-              originalPrice: p.originalPrice ?? undefined,
-              imageUrl: p.imageUrl ?? undefined,
-              productUrl: p.productUrl,
-              sku: p.sku ?? undefined,
-              inStock: p.inStock ?? true,
-              isHighMargin: p.isHighMargin ?? false,
-              marginReason: p.marginReason ?? undefined,
-              specs,
-              isTopPick: false,
-              priceDifference: priceDiff,
-              upgradeScore: score,
-              isValidUpgrade,
-              upgradeReason,
-            };
-          });
-
-          const validUpgrades = scoredAlternatives
-            .filter((alt) => alt.isValidUpgrade)
-            .sort((a, b) => b.upgradeScore - a.upgradeScore)
-            .slice(0, 8);
-
-          const topPickIndex = findTopPick(validUpgrades);
-          if (topPickIndex >= 0) {
-            validUpgrades[topPickIndex].isTopPick = true;
-          }
-
-          const products = [reference, ...validUpgrades];
-
-          console.log(`Found ${products.length} products (1 reference + ${validUpgrades.length} alternatives) from database for "${query}"`);
-          return res.json({
-            products,
-            totalCount: dbResults.length,
-            searchQuery: query,
-            source: "database",
-          });
-        }
-      }
-
-      // Fallback to Power.dk API
-      const headers = {
-        "User-Agent": getRandomUserAgent(),
-        "Accept": "application/json",
-        "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
-        "Referer": "https://www.power.dk/",
-        "Origin": "https://www.power.dk",
-      };
-
-      const searchUrl = `${POWER_API_BASE}?q=${encodeURIComponent(query)}&cat=${LAPTOP_CATEGORY_ID}&size=15&from=0`;
-
-      console.log("Fetching from Power.dk:", searchUrl);
-
-      const response = await axios.get(searchUrl, {
-        headers,
-        timeout: 15000,
-      });
-
-      const data = response.data;
-
-      let rawProducts = data?.products || [];
-      const totalCount = data?.totalProductCount || rawProducts.length;
-
-      // Filter to only in-stock products (online availability)
-      rawProducts = rawProducts.filter((p: any) => p.stockCount > 0 || p.canAddToCart);
-
-      // Guard: If no products found from API, return empty result
-      if (rawProducts.length === 0) {
-        console.log(`No in-stock products found for query "${query}"`);
-        return res.json({
-          products: [],
-          totalCount: 0,
-          searchQuery: query,
-        });
-      }
-
-      // Map the main searched product from API
-      const mainProduct = rawProducts[0];
-      const mainName = mainProduct.title || "Ukendt produkt";
-      const mainBrand = mainProduct.manufacturerName || "Ukendt";
-      const mainPrice = mainProduct.price || 0;
-      const mainMarginInfo = isHighMarginProduct(mainBrand, mainPrice);
-
-      // Try to get specs from database first, fallback to extraction using salesArguments
-      const mainProductId = mainProduct.productId?.toString() || "product-0";
-      const dbProduct = await storage.getProductById(mainProductId);
-      const mainSalesArgs = mainProduct.salesArguments || "";
-      const mainSpecs = (dbProduct?.specs as ExtractedSpecs) || extractSpecs(mainName, mainSalesArgs);
-      console.log(`Main product ${mainProductId} specs from ${dbProduct ? 'database' : 'extraction'}:`, mainSpecs);
-
-      let mainProductUrl = mainProduct.url || "";
-      if (mainProductUrl && !mainProductUrl.startsWith("http")) {
-        mainProductUrl = `https://www.power.dk${mainProductUrl}`;
-      }
-
-      const reference = {
-        id: mainProductId,
-        name: mainName,
-        brand: mainBrand,
-        price: mainPrice,
-        originalPrice: mainProduct.previousPrice || undefined,
-        imageUrl: getImageUrl(mainProduct.productImage) || undefined,
-        productUrl: mainProductUrl,
-        sku: mainProduct.barcode || mainProduct.elguideId || undefined,
-        inStock: mainProduct.stockCount > 0 || mainProduct.canAddToCart,
-        isHighMargin: mainMarginInfo.isHighMargin,
-        marginReason: mainMarginInfo.reason,
-        specs: mainSpecs,
-        isTopPick: false,
-        priceDifference: 0,
-        upgradeScore: 0,
-      };
-
-      // Fetch alternatives from database if available
-      let products = [reference];
-      const dbAltCount = await storage.getProductCount();
-
-      if (dbAltCount > 0) {
-        console.log("Fetching alternatives from database...");
-        const dbAlternatives = await storage.getAllProducts();
+        // Fetch ALL products from database to find alternatives (not just search results)
+        const allDbProducts = await storage.getAllProducts();
         const referencePrice = reference.price;
-        const referenceSpecs = reference.specs;
+        const referenceSpecs = reference.specs as ExtractedSpecs;
         // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
         const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
 
-        // Filter to HIGH MARGIN products with RAM+Storage specs (CPU optional) and within price range
-        const validDbProducts = dbAlternatives.filter((p) => {
+        // Filter to valid alternatives with RAM+Storage specs
+        const validDbProducts = allDbProducts.filter((p) => {
           if (p.id === reference.id) return false;
           if (p.price > maxPrice) return false;
 
-          // ONLY show high margin alternatives
-          if (!p.isHighMargin) return false;
-
-          // Require at least RAM+Storage for valid comparison (CPU optional)
           const specs = p.specs as ExtractedSpecs | null;
           if (!specs) return false;
           if (!specs.ramGB || specs.ramGB === 0) return false;
           if (!specs.storageGB || specs.storageGB === 0) return false;
 
+          // Enforce strict high-margin requirement for suggestions per user request (92/98/Cepter)
+          if (!p.isHighMargin) return false;
+
           return true;
         });
 
-        // Map DB products directly to response format and score them
         const scoredAlternatives = validDbProducts.map((p) => {
           const specs = (p.specs as ExtractedSpecs) || {};
           const priceDiff = p.price - referencePrice;
@@ -1221,7 +1006,6 @@ export async function registerRoutes(
           };
         });
 
-        // Sort by upgrade score and take top 8
         const validUpgrades = scoredAlternatives
           .filter((alt) => alt.isValidUpgrade)
           .sort((a, b) => b.upgradeScore - a.upgradeScore)
@@ -1232,508 +1016,667 @@ export async function registerRoutes(
           validUpgrades[topPickIndex].isTopPick = true;
         }
 
-        products = [reference, ...validUpgrades];
-        console.log(`Found ${validUpgrades.length} valid alternatives from database`);
-      } else {
-        // Fallback to Power.dk category if database is empty
-        console.log("Database empty, fetching alternatives from Power.dk...");
-        if (rawProducts.length === 1) {
-          const categoryUrl = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=20&from=0`;
+        const products = [reference, ...validUpgrades];
 
-          try {
-            const altResponse = await axios.get(categoryUrl, { headers, timeout: 15000 });
-            const altProducts = altResponse.data?.products || [];
-            const alternatives = altProducts
-              .filter((p: any) => p.productId?.toString() !== reference.id)
-              .filter((p: any) => p.stockCount > 0 || p.canAddToCart)
-              .slice(0, 15);
-
-            const mappedAlts = alternatives.map((item: any) => {
-              const name = item.title || "Ukendt produkt";
-              const brand = item.manufacturerName || "Ukendt";
-              const price = item.price || 0;
-              const marginInfo = isHighMarginProduct(brand, price);
-              const salesArgs = item.salesArguments || "";
-              const specs = extractSpecs(name, salesArgs);
-              let productUrl = item.url || "";
-              if (productUrl && !productUrl.startsWith("http")) {
-                productUrl = `https://www.power.dk${productUrl}`;
-              }
-
-              const priceDiff = price - reference.price;
-              const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
-                specs, reference.specs, marginInfo.isHighMargin, price, reference.price
-              );
-
-              return {
-                id: item.productId?.toString() || "",
-                name, brand, price,
-                originalPrice: item.previousPrice || undefined,
-                imageUrl: getImageUrl(item.productImage) || undefined,
-                productUrl,
-                sku: item.barcode || item.elguideId || undefined,
-                inStock: item.stockCount > 0 || item.canAddToCart,
-                isHighMargin: marginInfo.isHighMargin,
-                marginReason: marginInfo.reason,
-                specs,
-                isTopPick: false,
-                priceDifference: priceDiff,
-                upgradeScore: score,
-                isValidUpgrade,
-                upgradeReason,
-              };
-            });
-
-            const validUpgrades = mappedAlts
-              .filter((alt: any) => alt.isValidUpgrade && alt.isHighMargin)
-              .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
-              .slice(0, 8);
-
-            const topPickIndex = findTopPick(validUpgrades);
-            if (topPickIndex >= 0) {
-              validUpgrades[topPickIndex].isTopPick = true;
-            }
-
-            products = [reference, ...validUpgrades];
-            console.log(`Added ${validUpgrades.length} alternatives from Power.dk category`);
-          } catch (altError) {
-            console.log("Could not fetch alternatives:", altError);
-          }
-        }
+        console.log(`Found ${products.length} products (1 reference + ${validUpgrades.length} alternatives) from database for "${query}"`);
+        return res.json({
+          products,
+          totalCount: dbResults.length,
+          searchQuery: query,
+          source: "database",
+        });
       }
+    }
 
-      const result = {
-        products,
-        totalCount,
-        searchQuery: query,
-      };
+    // Fallback to Power.dk API
+    const headers = {
+      "User-Agent": getRandomUserAgent(),
+      "Accept": "application/json",
+      "Accept-Language": "da-DK,da;q=0.9,en;q=0.8",
+      "Referer": "https://www.power.dk/",
+      "Origin": "https://www.power.dk",
+    };
 
-      console.log(`Found ${products.length} products for query "${query}"`);
-      res.json(result);
+    const searchUrl = `${POWER_API_BASE}?q=${encodeURIComponent(query)}&cat=${LAPTOP_CATEGORY_ID}&size=15&from=0`;
 
-    } catch (error: any) {
-      console.error("Search API error:", error.message);
+    console.log("Fetching from Power.dk:", searchUrl);
 
-      if (axios.isAxiosError(error)) {
-        if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
-          return res.status(504).json({
-            error: "Timeout ved forbindelse til Power.dk",
-            products: [],
-            totalCount: 0,
-            searchQuery: req.query.q || "",
-          });
-        }
+    const response = await axios.get(searchUrl, {
+      headers,
+      timeout: 15000,
+    });
 
-        if (error.response?.status === 403 || error.response?.status === 429) {
-          return res.status(503).json({
-            error: "Adgang til Power.dk API er midlertidigt blokeret. Prøv igen om et øjeblik.",
-            products: [],
-            totalCount: 0,
-            searchQuery: req.query.q || "",
-          });
-        }
+    const data = response.data;
 
-        console.error("API Response:", error.response?.status, error.response?.data);
-      }
+    let rawProducts = data?.products || [];
+    const totalCount = data?.totalProductCount || rawProducts.length;
 
-      res.status(500).json({
-        error: "Der opstod en fejl ved søgning. Prøv igen.",
+    // Filter to only in-stock products (online availability)
+    rawProducts = rawProducts.filter((p: any) => p.stockCount > 0 || p.canAddToCart);
+
+    // Guard: If no products found from API, return empty result
+    if (rawProducts.length === 0) {
+      console.log(`No in-stock products found for query "${query}"`);
+      return res.json({
         products: [],
         totalCount: 0,
-        searchQuery: req.query.q || "",
+        searchQuery: query,
       });
     }
-  });
 
+    // Map the main searched product from API
+    const mainProduct = rawProducts[0];
+    const mainName = mainProduct.title || "Ukendt produkt";
+    const mainBrand = mainProduct.manufacturerName || "Ukendt";
+    const mainPrice = mainProduct.price || 0;
+    const mainMarginInfo = isHighMarginProduct(mainBrand, mainPrice);
 
-  // Compare products endpoint
-  app.get("/api/compare", async (req, res) => {
-    try {
-      const idsParam = req.query.ids as string;
-      if (!idsParam) {
-        return res.status(400).json({ error: "Missing ids parameter" });
+    // Try to get specs from database first, fallback to extraction using salesArguments
+    const mainProductId = mainProduct.productId?.toString() || "product-0";
+    const dbProduct = await storage.getProductById(mainProductId);
+    const mainSalesArgs = mainProduct.salesArguments || "";
+    const mainSpecs = (dbProduct?.specs as ExtractedSpecs) || extractSpecs(mainName, mainSalesArgs);
+    console.log(`Main product ${mainProductId} specs from ${dbProduct ? 'database' : 'extraction'}:`, mainSpecs);
+
+    let mainProductUrl = mainProduct.url || "";
+    if (mainProductUrl && !mainProductUrl.startsWith("http")) {
+      mainProductUrl = `https://www.power.dk${mainProductUrl}`;
+    }
+
+    const reference = {
+      id: mainProductId,
+      name: mainName,
+      brand: mainBrand,
+      price: mainPrice,
+      originalPrice: mainProduct.previousPrice || undefined,
+      imageUrl: getImageUrl(mainProduct.productImage) || undefined,
+      productUrl: mainProductUrl,
+      sku: mainProduct.barcode || mainProduct.elguideId || undefined,
+      inStock: mainProduct.stockCount > 0 || mainProduct.canAddToCart,
+      isHighMargin: mainMarginInfo.isHighMargin,
+      marginReason: mainMarginInfo.reason,
+      specs: mainSpecs,
+      isTopPick: false,
+      priceDifference: 0,
+      upgradeScore: 0,
+    };
+
+    // Fetch alternatives from database if available
+    let products = [reference];
+    const dbAltCount = await storage.getProductCount();
+
+    if (dbAltCount > 0) {
+      console.log("Fetching alternatives from database...");
+      const dbAlternatives = await storage.getAllProducts();
+      const referencePrice = reference.price;
+      const referenceSpecs = reference.specs;
+      // For budget laptops, ensure minimum price ceiling of 3000 kr or 2x reference price
+      const maxPrice = Math.max(referencePrice * 1.5, referencePrice * 2, 3000);
+
+      // Filter to HIGH MARGIN products with RAM+Storage specs (CPU optional) and within price range
+      const validDbProducts = dbAlternatives.filter((p) => {
+        if (p.id === reference.id) return false;
+        if (p.price > maxPrice) return false;
+
+        // ONLY show high margin alternatives
+        if (!p.isHighMargin) return false;
+
+        // Require at least RAM+Storage for valid comparison (CPU optional)
+        const specs = p.specs as ExtractedSpecs | null;
+        if (!specs) return false;
+        if (!specs.ramGB || specs.ramGB === 0) return false;
+        if (!specs.storageGB || specs.storageGB === 0) return false;
+
+        return true;
+      });
+
+      // Map DB products directly to response format and score them
+      const scoredAlternatives = validDbProducts.map((p) => {
+        const specs = (p.specs as ExtractedSpecs) || {};
+        const priceDiff = p.price - referencePrice;
+        const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
+          specs,
+          referenceSpecs,
+          p.isHighMargin ?? false,
+          p.price,
+          referencePrice,
+          maxPrice
+        );
+
+        return {
+          id: p.id,
+          name: p.name,
+          brand: p.brand,
+          price: p.price,
+          originalPrice: p.originalPrice ?? undefined,
+          imageUrl: p.imageUrl ?? undefined,
+          productUrl: p.productUrl,
+          sku: p.sku ?? undefined,
+          inStock: p.inStock ?? true,
+          isHighMargin: p.isHighMargin ?? false,
+          marginReason: p.marginReason ?? undefined,
+          specs,
+          isTopPick: false,
+          priceDifference: priceDiff,
+          upgradeScore: score,
+          isValidUpgrade,
+          upgradeReason,
+        };
+      });
+
+      // Sort by upgrade score and take top 8
+      const validUpgrades = scoredAlternatives
+        .filter((alt) => alt.isValidUpgrade)
+        .sort((a, b) => b.upgradeScore - a.upgradeScore)
+        .slice(0, 8);
+
+      const topPickIndex = findTopPick(validUpgrades);
+      if (topPickIndex >= 0) {
+        validUpgrades[topPickIndex].isTopPick = true;
       }
 
-      const ids = idsParam.split(",").map(id => id.trim()).filter(id => id.length > 0);
-      const products: ProductWithMargin[] = [];
+      products = [reference, ...validUpgrades];
+      console.log(`Found ${validUpgrades.length} valid alternatives from database`);
+    } else {
+      // Fallback to Power.dk category if database is empty
+      console.log("Database empty, fetching alternatives from Power.dk...");
+      if (rawProducts.length === 1) {
+        const categoryUrl = `${POWER_API_BASE}?cat=${LAPTOP_CATEGORY_ID}&size=20&from=0`;
 
-      console.log(`Comparing products: ${ids.join(", ")}`);
-
-      const headers = {
-        "User-Agent": getRandomUserAgent(),
-        "Accept": "application/json",
-      };
-
-      // Helper to fetch details
-      const fetchDetails = async (id: string) => {
-        // 1. Try DB first
         try {
-          const dbProduct = await storage.getProductById(id);
-          if (dbProduct) {
-            const specs = (dbProduct.specs as ExtractedSpecs) || {};
-            return {
-              id: dbProduct.id,
-              name: dbProduct.name,
-              brand: dbProduct.brand,
-              price: dbProduct.price,
-              originalPrice: dbProduct.originalPrice ?? undefined,
-              imageUrl: dbProduct.imageUrl ?? undefined,
-              productUrl: dbProduct.productUrl,
-              sku: dbProduct.sku ?? undefined,
-              inStock: dbProduct.inStock ?? true,
-              isHighMargin: dbProduct.isHighMargin ?? false,
-              marginReason: dbProduct.marginReason ?? undefined,
-              specs,
-              // Add default fields for ProductWithMargin
-              isTopPick: false,
-              priceDifference: 0,
-              upgradeScore: 0,
-              upgradeReason: undefined
-            } as ProductWithMargin;
-          }
-        } catch (dbErr) {
-          console.error(`DB error for ${id}:`, dbErr);
-        }
+          const altResponse = await axios.get(categoryUrl, { headers, timeout: 15000 });
+          const altProducts = altResponse.data?.products || [];
+          const alternatives = altProducts
+            .filter((p: any) => p.productId?.toString() !== reference.id)
+            .filter((p: any) => p.stockCount > 0 || p.canAddToCart)
+            .slice(0, 15);
 
-        // 2. Try Power Search API with specific ID query
-        // Matches logic in generic search but targeted
-        const searchUrl = `${POWER_API_BASE}?q=${id}&cat=${LAPTOP_CATEGORY_ID}&size=1`;
-        try {
-          console.log(`Fetching ${id} from Power API...`);
-          const response = await axios.get(searchUrl, { headers, timeout: 5000 });
-          const raw = response.data?.products?.[0];
-
-          if (raw) {
-            const name = raw.title || "Ukendt produkt";
-            const price = raw.price || 0;
-            const brand = raw.manufacturerName || "Ukendt";
+          const mappedAlts = alternatives.map((item: any) => {
+            const name = item.title || "Ukendt produkt";
+            const brand = item.manufacturerName || "Ukendt";
+            const price = item.price || 0;
             const marginInfo = isHighMarginProduct(brand, price);
-            const sales = raw.salesArguments || "";
-            const specs = extractSpecs(name, sales);
-
-            let productUrl = raw.url || "";
+            const salesArgs = item.salesArguments || "";
+            const specs = extractSpecs(name, salesArgs);
+            let productUrl = item.url || "";
             if (productUrl && !productUrl.startsWith("http")) {
               productUrl = `https://www.power.dk${productUrl}`;
             }
 
+            const priceDiff = price - reference.price;
+            const { score, isValidUpgrade, upgradeReason } = calculateUpgradeScore(
+              specs, reference.specs, marginInfo.isHighMargin, price, reference.price
+            );
+
             return {
-              id: raw.productId?.toString() || id,
-              name,
-              brand,
-              price,
-              originalPrice: raw.previousPrice || undefined,
-              imageUrl: getImageUrl(raw.productImage) || undefined,
+              id: item.productId?.toString() || "",
+              name, brand, price,
+              originalPrice: item.previousPrice || undefined,
+              imageUrl: getImageUrl(item.productImage) || undefined,
               productUrl,
-              sku: raw.barcode || raw.elguideId,
-              inStock: raw.stockCount > 0 || raw.canAddToCart,
+              sku: item.barcode || item.elguideId || undefined,
+              inStock: item.stockCount > 0 || item.canAddToCart,
               isHighMargin: marginInfo.isHighMargin,
               marginReason: marginInfo.reason,
               specs,
               isTopPick: false,
-              priceDifference: 0,
-              upgradeScore: 0,
-              upgradeReason: undefined
-            } as ProductWithMargin;
-          } else {
-            console.log(`Product ${id} not found in Power API`);
+              priceDifference: priceDiff,
+              upgradeScore: score,
+              isValidUpgrade,
+              upgradeReason,
+            };
+          });
+
+          const validUpgrades = mappedAlts
+            .filter((alt: any) => alt.isValidUpgrade && alt.isHighMargin)
+            .sort((a: any, b: any) => b.upgradeScore - a.upgradeScore)
+            .slice(0, 8);
+
+          const topPickIndex = findTopPick(validUpgrades);
+          if (topPickIndex >= 0) {
+            validUpgrades[topPickIndex].isTopPick = true;
           }
-        } catch (e: any) {
-          console.error(`Failed to fetch ${id} from Power:`, e.message);
-        }
-        return null;
-      };
 
-      for (const id of ids) {
-        const product = await fetchDetails(id);
-        if (product) {
-          products.push(product);
+          products = [reference, ...validUpgrades];
+          console.log(`Added ${validUpgrades.length} alternatives from Power.dk category`);
+        } catch (altError) {
+          console.log("Could not fetch alternatives:", altError);
         }
       }
-
-      res.json({ products });
-
-    } catch (error: any) {
-      console.error("Compare error:", error);
-      res.status(500).json({ error: "Failed to compare products" });
     }
-  });
 
-  // Power.dk AI Comparison Proxy Endpoint
-  app.post("/api/ai-compare", async (req, res) => {
-    try {
-      const { ids } = req.body;
-      if (!ids || !Array.isArray(ids) || ids.length < 2) {
-        return res.status(400).json({ error: "Kræver mindst 2 produkt-ID'er" });
+    const result = {
+      products,
+      totalCount,
+      searchQuery: query,
+    };
+
+    console.log(`Found ${products.length} products for query "${query}"`);
+    res.json(result);
+
+  } catch (error: any) {
+    console.error("Search API error:", error.message);
+
+    if (axios.isAxiosError(error)) {
+      if (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT") {
+        return res.status(504).json({
+          error: "Timeout ved forbindelse til Power.dk",
+          products: [],
+          totalCount: 0,
+          searchQuery: req.query.q || "",
+        });
       }
 
-      // Construct Power.dk API URL
-      // Format: https://www.power.dk/api/v2/products/comparison-summary?productIds=ID1&productIds=ID2
-      const queryString = ids.map(id => `productIds=${id}`).join("&");
-      const url = `https://www.power.dk/api/v2/products/comparison-summary?${queryString}`;
+      if (error.response?.status === 403 || error.response?.status === 429) {
+        return res.status(503).json({
+          error: "Adgang til Power.dk API er midlertidigt blokeret. Prøv igen om et øjeblik.",
+          products: [],
+          totalCount: 0,
+          searchQuery: req.query.q || "",
+        });
+      }
 
-      console.log("Fetching AI summary from Power.dk:", url);
-
-      const response = await axios.get(url, {
-        headers: {
-          "User-Agent": getRandomUserAgent(),
-          "Accept": "application/json"
-        },
-        timeout: 10000
-      });
-
-      // The API returns a JSON string containing HTML
-      const htmlContent = response.data;
-
-      res.json({ summary: htmlContent });
-
-    } catch (error: any) {
-      console.error("AI Compare Proxy Error:", error.message);
-
-      // Fallback: If Power API fails, generate deterministic summary
-      // We need to fetch products first for deterministic summary, but let's just return a generic error or simple text if API fails
-      // Since fetching products again is expensive here inside the catch block without the products object readily available.
-      // We'll just return an error message that the client can handle or display.
-      // Or we can try to return a simple text if we have product data? No, let's keep it simple.
-      res.status(502).json({
-        error: "Kunne ikke hente AI-oversigt fra Power.dk",
-        details: error.message
-      });
+      console.error("API Response:", error.response?.status, error.response?.data);
     }
-  });
+
+    res.status(500).json({
+      error: "Der opstod en fejl ved søgning. Prøv igen.",
+      products: [],
+      totalCount: 0,
+      searchQuery: req.query.q || "",
+    });
+  }
+});
 
 
-  // AI Pitch Generation endpoint (Deterministic fallback - Puppeteer removed for Vercel compatibility)
-  app.post("/api/generate-pitch", async (req, res) => {
-    try {
-      const { mainProduct, topPick } = req.body;
-
-      if (!mainProduct || !topPick) {
-        return res.status(400).json({ error: "Missing mainProduct or topPick in request body" });
-      }
-
-      const priceDiff = topPick.priceDifference || (topPick.price - mainProduct.price);
-      const dailyCost = Math.round(priceDiff / 365);
-
-      let valuePitch = "";
-      let lossPitch = "";
-      let futurePitch = "";
-
-      // Value Pitch Logic
-      if (priceDiff > 0) {
-        valuePitch = `For kun ${dailyCost} kr om dagen får du en maskine der er langt hurtigere. Det er en lille pris for at undgå ventetid i hverdagen.`;
-      } else {
-        valuePitch = `Du sparer ${Math.abs(priceDiff)} kr og får samtidig en bedre maskine. Det er en ren win-win situation.`;
-      }
-
-      // Loss Aversion Logic
-      if ((mainProduct.specs?.ramGB || 0) < 16 && (topPick.specs?.ramGB || 0) >= 16) {
-        lossPitch = "Den billige model har kun 8GB RAM - det bliver hurtigt en flaskehals. Med 16GB slipper du for at den hakker når du har mange faner åbne.";
-      } else if ((mainProduct.specs?.storageGB || 0) < 512 && (topPick.specs?.storageGB || 0) >= 512) {
-        lossPitch = "256GB lager bliver fyldt overraskende hurtigt. Med 512GB undgår du at skulle slette dine filer og billeder om et år.";
-      } else {
-        lossPitch = "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom. Denne opgradering sikrer den gode oplevelse.";
-      }
-
-      // Future Proofing Logic
-      futurePitch = `Denne model er bygget med nyere komponenter der holder 2-3 år længere. Det er billigere end at skulle skifte computeren ud før tid.`;
-
-      res.json({
-        valuePitch,
-        lossAversionPitch: lossPitch,
-        futureProofingPitch: futurePitch,
-        isAiGenerated: false
-      });
-
-    } catch (error: any) {
-      console.error("Pitch generation error:", error.message);
-      res.status(500).json({
-        valuePitch: "Denne opgradering giver dig bedre ydelse til en fornuftig pris.",
-        lossAversionPitch: "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom.",
-        futureProofingPitch: "Nyere komponenter holder længere - det er billigere end at skifte før tid.",
-        isAiGenerated: false
-      });
+// Compare products endpoint
+app.get("/api/compare", async (req, res) => {
+  try {
+    const idsParam = req.query.ids as string;
+    if (!idsParam) {
+      return res.status(400).json({ error: "Missing ids parameter" });
     }
-  });
 
-  // PDF Export endpoint
-  app.post("/api/export/pdf", async (req, res) => {
-    try {
-      const { products, searchQuery } = req.body as {
-        products: ProductWithMargin[];
-        searchQuery: string;
-      };
+    const ids = idsParam.split(",").map(id => id.trim()).filter(id => id.length > 0);
+    const products: ProductWithMargin[] = [];
 
-      if (!products || products.length === 0) {
-        return res.status(400).json({ error: "Ingen produkter at eksportere" });
+    console.log(`Comparing products: ${ids.join(", ")}`);
+
+    const headers = {
+      "User-Agent": getRandomUserAgent(),
+      "Accept": "application/json",
+    };
+
+    // Helper to fetch details
+    const fetchDetails = async (id: string) => {
+      // 1. Try DB first
+      try {
+        const dbProduct = await storage.getProductById(id);
+        if (dbProduct) {
+          const specs = (dbProduct.specs as ExtractedSpecs) || {};
+          return {
+            id: dbProduct.id,
+            name: dbProduct.name,
+            brand: dbProduct.brand,
+            price: dbProduct.price,
+            originalPrice: dbProduct.originalPrice ?? undefined,
+            imageUrl: dbProduct.imageUrl ?? undefined,
+            productUrl: dbProduct.productUrl,
+            sku: dbProduct.sku ?? undefined,
+            inStock: dbProduct.inStock ?? true,
+            isHighMargin: dbProduct.isHighMargin ?? false,
+            marginReason: dbProduct.marginReason ?? undefined,
+            specs,
+            // Add default fields for ProductWithMargin
+            isTopPick: false,
+            priceDifference: 0,
+            upgradeScore: 0,
+            upgradeReason: undefined
+          } as ProductWithMargin;
+        }
+      } catch (dbErr) {
+        console.error(`DB error for ${id}:`, dbErr);
       }
 
-      // Dynamic import to avoid loading ~14MB font files at cold start (crashes Vercel)
-      const PDFDocument = (await import("pdfkit")).default;
-      const doc = new PDFDocument({ margin: 50, size: "A4" });
+      // 2. Try Power Search API with specific ID query
+      // Matches logic in generic search but targeted
+      const searchUrl = `${POWER_API_BASE}?q=${id}&cat=${LAPTOP_CATEGORY_ID}&size=1`;
+      try {
+        console.log(`Fetching ${id} from Power API...`);
+        const response = await axios.get(searchUrl, { headers, timeout: 5000 });
+        const raw = response.data?.products?.[0];
 
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="power-produkter-${Date.now()}.pdf"`
-      );
+        if (raw) {
+          const name = raw.title || "Ukendt produkt";
+          const price = raw.price || 0;
+          const brand = raw.manufacturerName || "Ukendt";
+          const marginInfo = isHighMarginProduct(brand, price);
+          const sales = raw.salesArguments || "";
+          const specs = extractSpecs(name, sales);
 
-      doc.pipe(res);
+          let productUrl = raw.url || "";
+          if (productUrl && !productUrl.startsWith("http")) {
+            productUrl = `https://www.power.dk${productUrl}`;
+          }
 
-      // Header
-      doc.fontSize(20).text("Power.dk - Produktsammenligning", { align: "center" });
-      doc.moveDown(0.5);
+          return {
+            id: raw.productId?.toString() || id,
+            name,
+            brand,
+            price,
+            originalPrice: raw.previousPrice || undefined,
+            imageUrl: getImageUrl(raw.productImage) || undefined,
+            productUrl,
+            sku: raw.barcode || raw.elguideId,
+            inStock: raw.stockCount > 0 || raw.canAddToCart,
+            isHighMargin: marginInfo.isHighMargin,
+            marginReason: marginInfo.reason,
+            specs,
+            isTopPick: false,
+            priceDifference: 0,
+            upgradeScore: 0,
+            upgradeReason: undefined
+          } as ProductWithMargin;
+        } else {
+          console.log(`Product ${id} not found in Power API`);
+        }
+      } catch (e: any) {
+        console.error(`Failed to fetch ${id} from Power:`, e.message);
+      }
+      return null;
+    };
 
-      // Date and search info
-      const now = new Date();
-      doc.fontSize(10).fillColor("#666666");
-      doc.text(`Dato: ${now.toLocaleDateString("da-DK")} kl. ${now.toLocaleTimeString("da-DK")}`, { align: "center" });
-      doc.text(`Søgning: "${searchQuery}"`, { align: "center" });
-      doc.moveDown(1);
+    for (const id of ids) {
+      const product = await fetchDetails(id);
+      if (product) {
+        products.push(product);
+      }
+    }
 
-      // Table setup
-      const tableTop = doc.y;
-      const colWidths = [180, 70, 70, 100, 75];
-      const colHeaders = ["Produkt", "Mærke", "Pris (DKK)", "Specs", "Avance"];
-      const startX = 50;
-      const rowHeight = 40;
+    res.json({ products });
 
-      // Draw table header
-      doc.fontSize(9).fillColor("#FFFFFF");
-      doc.rect(startX, tableTop, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
+  } catch (error: any) {
+    console.error("Compare error:", error);
+    res.status(500).json({ error: "Failed to compare products" });
+  }
+});
 
-      let xPos = startX;
-      colHeaders.forEach((header, i) => {
-        doc.fillColor("#FFFFFF").text(header, xPos + 4, tableTop + 5, { width: colWidths[i] - 8, height: 15 });
+// Power.dk AI Comparison Proxy Endpoint
+app.post("/api/ai-compare", async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length < 2) {
+      return res.status(400).json({ error: "Kræver mindst 2 produkt-ID'er" });
+    }
+
+    // Construct Power.dk API URL
+    // Format: https://www.power.dk/api/v2/products/comparison-summary?productIds=ID1&productIds=ID2
+    const queryString = ids.map(id => `productIds=${id}`).join("&");
+    const url = `https://www.power.dk/api/v2/products/comparison-summary?${queryString}`;
+
+    console.log("Fetching AI summary from Power.dk:", url);
+
+    const response = await axios.get(url, {
+      headers: {
+        "User-Agent": getRandomUserAgent(),
+        "Accept": "application/json"
+      },
+      timeout: 10000
+    });
+
+    // The API returns a JSON string containing HTML
+    const htmlContent = response.data;
+
+    res.json({ summary: htmlContent });
+
+  } catch (error: any) {
+    console.error("AI Compare Proxy Error:", error.message);
+
+    // Fallback: If Power API fails, generate deterministic summary
+    // We need to fetch products first for deterministic summary, but let's just return a generic error or simple text if API fails
+    // Since fetching products again is expensive here inside the catch block without the products object readily available.
+    // We'll just return an error message that the client can handle or display.
+    // Or we can try to return a simple text if we have product data? No, let's keep it simple.
+    res.status(502).json({
+      error: "Kunne ikke hente AI-oversigt fra Power.dk",
+      details: error.message
+    });
+  }
+});
+
+
+// AI Pitch Generation endpoint (Deterministic fallback - Puppeteer removed for Vercel compatibility)
+app.post("/api/generate-pitch", async (req, res) => {
+  try {
+    const { mainProduct, topPick } = req.body;
+
+    if (!mainProduct || !topPick) {
+      return res.status(400).json({ error: "Missing mainProduct or topPick in request body" });
+    }
+
+    const priceDiff = topPick.priceDifference || (topPick.price - mainProduct.price);
+    const dailyCost = Math.round(priceDiff / 365);
+
+    let valuePitch = "";
+    let lossPitch = "";
+    let futurePitch = "";
+
+    // Value Pitch Logic
+    if (priceDiff > 0) {
+      valuePitch = `For kun ${dailyCost} kr om dagen får du en maskine der er langt hurtigere. Det er en lille pris for at undgå ventetid i hverdagen.`;
+    } else {
+      valuePitch = `Du sparer ${Math.abs(priceDiff)} kr og får samtidig en bedre maskine. Det er en ren win-win situation.`;
+    }
+
+    // Loss Aversion Logic
+    if ((mainProduct.specs?.ramGB || 0) < 16 && (topPick.specs?.ramGB || 0) >= 16) {
+      lossPitch = "Den billige model har kun 8GB RAM - det bliver hurtigt en flaskehals. Med 16GB slipper du for at den hakker når du har mange faner åbne.";
+    } else if ((mainProduct.specs?.storageGB || 0) < 512 && (topPick.specs?.storageGB || 0) >= 512) {
+      lossPitch = "256GB lager bliver fyldt overraskende hurtigt. Med 512GB undgår du at skulle slette dine filer og billeder om et år.";
+    } else {
+      lossPitch = "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom. Denne opgradering sikrer den gode oplevelse.";
+    }
+
+    // Future Proofing Logic
+    futurePitch = `Denne model er bygget med nyere komponenter der holder 2-3 år længere. Det er billigere end at skulle skifte computeren ud før tid.`;
+
+    res.json({
+      valuePitch,
+      lossAversionPitch: lossPitch,
+      futureProofingPitch: futurePitch,
+      isAiGenerated: false
+    });
+
+  } catch (error: any) {
+    console.error("Pitch generation error:", error.message);
+    res.status(500).json({
+      valuePitch: "Denne opgradering giver dig bedre ydelse til en fornuftig pris.",
+      lossAversionPitch: "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom.",
+      futureProofingPitch: "Nyere komponenter holder længere - det er billigere end at skifte før tid.",
+      isAiGenerated: false
+    });
+  }
+});
+
+// PDF Export endpoint
+app.post("/api/export/pdf", async (req, res) => {
+  try {
+    const { products, searchQuery } = req.body as {
+      products: ProductWithMargin[];
+      searchQuery: string;
+    };
+
+    if (!products || products.length === 0) {
+      return res.status(400).json({ error: "Ingen produkter at eksportere" });
+    }
+
+    // Dynamic import to avoid loading ~14MB font files at cold start (crashes Vercel)
+    const PDFDocument = (await import("pdfkit")).default;
+    const doc = new PDFDocument({ margin: 50, size: "A4" });
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="power-produkter-${Date.now()}.pdf"`
+    );
+
+    doc.pipe(res);
+
+    // Header
+    doc.fontSize(20).text("Power.dk - Produktsammenligning", { align: "center" });
+    doc.moveDown(0.5);
+
+    // Date and search info
+    const now = new Date();
+    doc.fontSize(10).fillColor("#666666");
+    doc.text(`Dato: ${now.toLocaleDateString("da-DK")} kl. ${now.toLocaleTimeString("da-DK")}`, { align: "center" });
+    doc.text(`Søgning: "${searchQuery}"`, { align: "center" });
+    doc.moveDown(1);
+
+    // Table setup
+    const tableTop = doc.y;
+    const colWidths = [180, 70, 70, 100, 75];
+    const colHeaders = ["Produkt", "Mærke", "Pris (DKK)", "Specs", "Avance"];
+    const startX = 50;
+    const rowHeight = 40;
+
+    // Draw table header
+    doc.fontSize(9).fillColor("#FFFFFF");
+    doc.rect(startX, tableTop, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
+
+    let xPos = startX;
+    colHeaders.forEach((header, i) => {
+      doc.fillColor("#FFFFFF").text(header, xPos + 4, tableTop + 5, { width: colWidths[i] - 8, height: 15 });
+      xPos += colWidths[i];
+    });
+
+    // Draw table rows
+    let yPos = tableTop + 20;
+
+    products.forEach((product, index) => {
+      // Check for page break
+      if (yPos > 720) {
+        doc.addPage();
+        yPos = 50;
+
+        // Redraw header on new page
+        doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
+        xPos = startX;
+        colHeaders.forEach((header, i) => {
+          doc.fillColor("#FFFFFF").text(header, xPos + 4, yPos + 5, { width: colWidths[i] - 8, height: 15 });
+          xPos += colWidths[i];
+        });
+        yPos += 20;
+      }
+
+      const isHighMargin = product.isHighMargin;
+      const rowColor = isHighMargin ? "#FFF5EB" : (index % 2 === 0 ? "#FFFFFF" : "#F8F8F8");
+
+      // Row background
+      doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).fill(rowColor);
+
+      // Row border
+      doc.strokeColor("#DDDDDD").lineWidth(0.5);
+      doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).stroke();
+
+      // Cell data
+      const specs = product.specs || {};
+      const specText = [specs.cpu, specs.ram, specs.storage].filter(Boolean).join(", ");
+      const marginText = isHighMargin ? `Høj${product.marginReason ? "\n(" + product.marginReason + ")" : ""}` : "Standard";
+
+      const rowData = [
+        (isHighMargin ? "★ " : "") + product.name.substring(0, 50) + (product.name.length > 50 ? "..." : ""),
+        product.brand,
+        product.price.toLocaleString("da-DK"),
+        specText.substring(0, 35) + (specText.length > 35 ? "..." : ""),
+        marginText,
+      ];
+
+      xPos = startX;
+      doc.fontSize(7).fillColor(isHighMargin ? "#FF6600" : "#333333");
+
+      rowData.forEach((cell, i) => {
+        doc.text(cell, xPos + 3, yPos + 4, { width: colWidths[i] - 6, height: rowHeight - 8 });
         xPos += colWidths[i];
       });
 
-      // Draw table rows
-      let yPos = tableTop + 20;
+      yPos += rowHeight;
+    });
 
-      products.forEach((product, index) => {
-        // Check for page break
-        if (yPos > 720) {
-          doc.addPage();
-          yPos = 50;
+    // Footer
+    doc.fontSize(8).fillColor("#999999");
+    doc.text(`Genereret af Power Margin Optimizer Pro - ${products.length} produkter`, 50, 780, { align: "center" });
 
-          // Redraw header on new page
-          doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), 20).fill("#FF6600");
-          xPos = startX;
-          colHeaders.forEach((header, i) => {
-            doc.fillColor("#FFFFFF").text(header, xPos + 4, yPos + 5, { width: colWidths[i] - 8, height: 15 });
-            xPos += colWidths[i];
-          });
-          yPos += 20;
-        }
+    doc.end();
 
-        const isHighMargin = product.isHighMargin;
-        const rowColor = isHighMargin ? "#FFF5EB" : (index % 2 === 0 ? "#FFFFFF" : "#F8F8F8");
+  } catch (error: any) {
+    console.error("PDF export error:", error.message);
+    res.status(500).json({ error: "Fejl ved PDF-eksport: " + error.message });
+  }
+});
 
-        // Row background
-        doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).fill(rowColor);
+// Excel Export endpoint
+app.post("/api/export/excel", async (req, res) => {
+  try {
+    const { products, searchQuery } = req.body as {
+      products: ProductWithMargin[];
+      searchQuery: string;
+    };
 
-        // Row border
-        doc.strokeColor("#DDDDDD").lineWidth(0.5);
-        doc.rect(startX, yPos, colWidths.reduce((a, b) => a + b, 0), rowHeight).stroke();
-
-        // Cell data
-        const specs = product.specs || {};
-        const specText = [specs.cpu, specs.ram, specs.storage].filter(Boolean).join(", ");
-        const marginText = isHighMargin ? `Høj${product.marginReason ? "\n(" + product.marginReason + ")" : ""}` : "Standard";
-
-        const rowData = [
-          (isHighMargin ? "★ " : "") + product.name.substring(0, 50) + (product.name.length > 50 ? "..." : ""),
-          product.brand,
-          product.price.toLocaleString("da-DK"),
-          specText.substring(0, 35) + (specText.length > 35 ? "..." : ""),
-          marginText,
-        ];
-
-        xPos = startX;
-        doc.fontSize(7).fillColor(isHighMargin ? "#FF6600" : "#333333");
-
-        rowData.forEach((cell, i) => {
-          doc.text(cell, xPos + 3, yPos + 4, { width: colWidths[i] - 6, height: rowHeight - 8 });
-          xPos += colWidths[i];
-        });
-
-        yPos += rowHeight;
-      });
-
-      // Footer
-      doc.fontSize(8).fillColor("#999999");
-      doc.text(`Genereret af Power Margin Optimizer Pro - ${products.length} produkter`, 50, 780, { align: "center" });
-
-      doc.end();
-
-    } catch (error: any) {
-      console.error("PDF export error:", error.message);
-      res.status(500).json({ error: "Fejl ved PDF-eksport: " + error.message });
+    if (!products || products.length === 0) {
+      return res.status(400).json({ error: "Ingen produkter at eksportere" });
     }
-  });
 
-  // Excel Export endpoint
-  app.post("/api/export/excel", async (req, res) => {
-    try {
-      const { products, searchQuery } = req.body as {
-        products: ProductWithMargin[];
-        searchQuery: string;
-      };
+    // Prepare data for Excel
+    const data = products.map((product) => ({
+      "Produkt": product.name,
+      "Mærke": product.brand,
+      "Pris (DKK)": product.price,
+      "Original Pris": product.originalPrice || "",
+      "CPU": product.specs?.cpu || "",
+      "RAM": product.specs?.ram || "",
+      "Lagerplads": product.specs?.storage || "",
+      "Høj Avance": product.isHighMargin ? "Ja" : "Nej",
+      "Grund": product.marginReason || "",
+    }));
 
-      if (!products || products.length === 0) {
-        return res.status(400).json({ error: "Ingen produkter at eksportere" });
-      }
+    // Dynamic import to avoid bundling issues in serverless
+    const XLSX = await import("xlsx");
 
-      // Prepare data for Excel
-      const data = products.map((product) => ({
-        "Produkt": product.name,
-        "Mærke": product.brand,
-        "Pris (DKK)": product.price,
-        "Original Pris": product.originalPrice || "",
-        "CPU": product.specs?.cpu || "",
-        "RAM": product.specs?.ram || "",
-        "Lagerplads": product.specs?.storage || "",
-        "Høj Avance": product.isHighMargin ? "Ja" : "Nej",
-        "Grund": product.marginReason || "",
-      }));
+    // Create workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(data);
 
-      // Dynamic import to avoid bundling issues in serverless
-      const XLSX = await import("xlsx");
+    // Set column widths
+    worksheet["!cols"] = [
+      { wch: 50 }, // Produkt
+      { wch: 15 }, // Mærke
+      { wch: 12 }, // Pris
+      { wch: 12 }, // Original Pris
+      { wch: 25 }, // CPU
+      { wch: 10 }, // RAM
+      { wch: 12 }, // Lagerplads
+      { wch: 10 }, // Høj Avance
+      { wch: 20 }, // Grund
+    ];
 
-      // Create workbook and worksheet
-      const workbook = XLSX.utils.book_new();
-      const worksheet = XLSX.utils.json_to_sheet(data);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Produkter");
 
-      // Set column widths
-      worksheet["!cols"] = [
-        { wch: 50 }, // Produkt
-        { wch: 15 }, // Mærke
-        { wch: 12 }, // Pris
-        { wch: 12 }, // Original Pris
-        { wch: 25 }, // CPU
-        { wch: 10 }, // RAM
-        { wch: 12 }, // Lagerplads
-        { wch: 10 }, // Høj Avance
-        { wch: 20 }, // Grund
-      ];
+    // Generate buffer
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, "Produkter");
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="power-produkter-${Date.now()}.xlsx"`
+    );
+    res.send(buffer);
 
-      // Generate buffer
-      const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+  } catch (error: any) {
+    console.error("Excel export error:", error.message);
+    res.status(500).json({ error: "Fejl ved Excel-eksport: " + error.message });
+  }
+});
 
-      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename="power-produkter-${Date.now()}.xlsx"`
-      );
-      res.send(buffer);
-
-    } catch (error: any) {
-      console.error("Excel export error:", error.message);
-      res.status(500).json({ error: "Fejl ved Excel-eksport: " + error.message });
-    }
-  });
-
-  return httpServer;
+return httpServer;
 }
