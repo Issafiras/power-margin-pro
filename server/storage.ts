@@ -1,4 +1,4 @@
-import { type User, type InsertUser, products, type InsertProduct, type DbProduct, type ProductSpecs, gpuBenchmarks, type InsertGpuBenchmark, type DbGpuBenchmark } from "../shared/schema";
+import { type User, type InsertUser, products, type InsertProduct, type DbProduct, type ProductSpecs, gpuBenchmarks, type InsertGpuBenchmark, type DbGpuBenchmark, cpuBenchmarks, type InsertCpuBenchmark, type DbCpuBenchmark } from "../shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
 import { and, eq, ilike, or, sql } from "drizzle-orm";
@@ -16,9 +16,9 @@ export interface IStorage {
   upsertGpuBenchmarks(items: InsertGpuBenchmark[]): Promise<void>;
   getGpuBenchmark(gpuName: string): Promise<DbGpuBenchmark | undefined>;
   getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]>;
-  upsertGpuBenchmarks(items: InsertGpuBenchmark[]): Promise<void>;
-  getGpuBenchmark(gpuName: string): Promise<DbGpuBenchmark | undefined>;
-  getAllGpuBenchmarks(): Promise<DbGpuBenchmark[]>;
+  upsertCpuBenchmarks(items: any[]): Promise<void>; // Using any since we haven't defined the type yet
+  getCpuBenchmark(cpuName: string): Promise<any | undefined>; // Using any since we haven't defined the type yet
+  getAllCpuBenchmarks(): Promise<any[]>; // Using any since we haven't defined the type yet
   clearProducts(): Promise<void>;
 }
 
@@ -82,9 +82,22 @@ export class MemStorage implements IStorage {
     throw new Error("MemStorage does not support GPU benchmarks. Use DatabaseStorage.");
   }
 
+  async upsertCpuBenchmarks(_items: InsertCpuBenchmark[]): Promise<void> {
+    throw new Error("MemStorage does not support CPU benchmarks. Use DatabaseStorage.");
+  }
+
+  async getCpuBenchmark(_cpuName: string): Promise<DbCpuBenchmark | undefined> {
+    throw new Error("MemStorage does not support CPU benchmarks. Use DatabaseStorage.");
+  }
+
+  async getAllCpuBenchmarks(): Promise<DbCpuBenchmark[]> {
+    throw new Error("MemStorage does not support CPU benchmarks. Use DatabaseStorage.");
+  }
+
   async clearProducts(): Promise<void> {
     throw new Error("MemStorage does not support products. Use DatabaseStorage.");
   }
+}
 }
 
 export class DatabaseStorage implements IStorage {
@@ -210,6 +223,36 @@ export class DatabaseStorage implements IStorage {
 
   async clearProducts(): Promise<void> {
     await db.delete(products);
+  }
+
+  async upsertCpuBenchmarks(items: InsertCpuBenchmark[]): Promise<void> {
+    if (items.length === 0) return;
+
+    await db
+      .insert(cpuBenchmarks)
+      .values(items)
+      .onConflictDoUpdate({
+        target: cpuBenchmarks.cpuName,
+        set: {
+          score: sql`excluded.score`,
+          rank: sql`excluded.rank`,
+          samples: sql`excluded.samples`,
+          url: sql`excluded.url`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
+  }
+
+  async getCpuBenchmark(cpuName: string): Promise<DbCpuBenchmark | undefined> {
+    const result = await db
+      .select()
+      .from(cpuBenchmarks)
+      .where(eq(cpuBenchmarks.cpuName, cpuName));
+    return result[0];
+  }
+
+  async getAllCpuBenchmarks(): Promise<DbCpuBenchmark[]> {
+    return await db.select().from(cpuBenchmarks);
   }
 }
 
