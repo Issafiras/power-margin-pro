@@ -1,289 +1,158 @@
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import {
-    Cpu, HardDrive, MemoryStick, Monitor, TrendingUp, TrendingDown,
-    Minus, Star, Sparkles, ArrowRight, Flame, Eye, EyeOff
-} from "lucide-react";
+// Product Comparison View
+// Side-by-side comparison med AI analyse
+
+import { Cpu, MemoryStick, HardDrive, Monitor, Zap, CheckCircle2, XCircle, Minus } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/specExtractor";
 import type { ProductWithMargin } from "@shared/schema";
-import { useState } from "react";
 
 interface ComparisonViewProps {
-    reference: ProductWithMargin;
-    alternative: ProductWithMargin;
-    onClose: () => void;
+  product1: ProductWithMargin;
+  product2: ProductWithMargin;
 }
 
-interface SpecComparison {
-    label: string;
-    icon: React.ReactNode;
-    referenceValue: string | number | undefined;
-    alternativeValue: string | number | undefined;
-    referenceNumeric?: number;
-    alternativeNumeric?: number;
-    higherIsBetter: boolean;
+function SpecRow({ 
+  label, 
+  icon: Icon, 
+  value1, 
+  value2, 
+  tier1, 
+  tier2 
+}: { 
+  label: string;
+  icon: any;
+  value1?: string | number;
+  value2?: string | number;
+  tier1?: number;
+  tier2?: number;
+}) {
+  const v1 = value1 || "—";
+  const v2 = value2 || "—";
+  
+  let winner1 = false;
+  let winner2 = false;
+  
+  if (tier1 && tier2) {
+    winner1 = tier1 > tier2;
+    winner2 = tier2 > tier1;
+  } else if (typeof value1 === "number" && typeof value2 === "number") {
+    winner1 = value1 > value2;
+    winner2 = value2 > value1;
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-2 py-2 border-b border-white/5 last:border-0">
+      <div className={cn(
+        "text-xs px-2 py-1 rounded text-right",
+        winner1 ? "bg-emerald-500/10 text-emerald-400 font-medium" : "text-muted-foreground"
+      )}>
+        {v1}
+      </div>
+      <div className="flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+        <Icon className="h-3 w-3" />
+        {label}
+      </div>
+      <div className={cn(
+        "text-xs px-2 py-1 rounded",
+        winner2 ? "bg-emerald-500/10 text-emerald-400 font-medium" : "text-muted-foreground"
+      )}>
+        {v2}
+      </div>
+    </div>
+  );
 }
 
-function getComparisonStatus(
-    refValue: number | undefined,
-    altValue: number | undefined,
-    higherIsBetter: boolean
-): 'better' | 'worse' | 'same' | 'unknown' {
-    if (refValue === undefined || altValue === undefined) return 'unknown';
-    if (refValue === altValue) return 'same';
-    if (higherIsBetter) {
-        return altValue > refValue ? 'better' : 'worse';
-    }
-    return altValue < refValue ? 'better' : 'worse';
-}
-
-export function ComparisonView({ reference, alternative, onClose }: ComparisonViewProps) {
-    const [showSellerView, setShowSellerView] = useState(true);
-
-    const priceDiff = alternative.price - reference.price;
-    const priceDiffPercent = ((priceDiff / reference.price) * 100).toFixed(1);
-
-    // Calculate estimated margin boost (Cepter = 15%, 98/92 endings = 8%, normal = 3%)
-    const getEstimatedMargin = (product: ProductWithMargin) => {
-        if (product.brand?.toLowerCase() === 'cepter') return 15;
-        const priceStr = Math.floor(product.price).toString();
-        if (priceStr.endsWith('98') || priceStr.endsWith('92')) return 8;
-        return 3;
-    };
-
-    const refMargin = getEstimatedMargin(reference);
-    const altMargin = getEstimatedMargin(alternative);
-    const marginBoost = altMargin - refMargin;
-
-    // Estimated provision (simplified calculation)
-    const estimatedProvision = (alternative.price * (altMargin / 100) * 0.1).toFixed(0);
-
-    const specs: SpecComparison[] = [
-        {
-            label: "RAM",
-            icon: <MemoryStick className="h-4 w-4" />,
-            referenceValue: reference.specs?.ram || "Ukendt",
-            alternativeValue: alternative.specs?.ram || "Ukendt",
-            referenceNumeric: reference.specs?.ramGB,
-            alternativeNumeric: alternative.specs?.ramGB,
-            higherIsBetter: true,
-        },
-        {
-            label: "Lager",
-            icon: <HardDrive className="h-4 w-4" />,
-            referenceValue: reference.specs?.storage || "Ukendt",
-            alternativeValue: alternative.specs?.storage || "Ukendt",
-            referenceNumeric: reference.specs?.storageGB,
-            alternativeNumeric: alternative.specs?.storageGB,
-            higherIsBetter: true,
-        },
-        {
-            label: "Processor",
-            icon: <Cpu className="h-4 w-4" />,
-            referenceValue: reference.specs?.cpu || "Ukendt",
-            alternativeValue: alternative.specs?.cpu || "Ukendt",
-            referenceNumeric: reference.specs?.cpuTier,
-            alternativeNumeric: alternative.specs?.cpuTier,
-            higherIsBetter: true,
-        },
-        {
-            label: "Grafik",
-            icon: <Monitor className="h-4 w-4" />,
-            referenceValue: reference.specs?.gpu || "Integreret",
-            alternativeValue: alternative.specs?.gpu || "Integreret",
-            referenceNumeric: reference.specs?.gpuTier,
-            alternativeNumeric: alternative.specs?.gpuTier,
-            higherIsBetter: true,
-        },
-    ];
-
-    // Generate sales pitch focusing on POSITIVE differences only
-    const generateSalesPitch = () => {
-        const improvements: string[] = [];
-
-        if ((alternative.specs?.ramGB || 0) > (reference.specs?.ramGB || 0)) {
-            const diff = (alternative.specs?.ramGB || 0) - (reference.specs?.ramGB || 0);
-            improvements.push(`${diff} GB mere RAM til multitasking`);
-        }
-        if ((alternative.specs?.storageGB || 0) > (reference.specs?.storageGB || 0)) {
-            improvements.push(`større lagerplads til alle dine filer`);
-        }
-        if ((alternative.specs?.cpuTier || 0) > (reference.specs?.cpuTier || 0)) {
-            improvements.push(`hurtigere processor`);
-        }
-        if ((alternative.specs?.gpuTier || 0) > (reference.specs?.gpuTier || 0)) {
-            improvements.push(`bedre grafik til gaming og video`);
-        }
-
-        if (improvements.length === 0) {
-            return "Et godt alternativ til samme prisklasse!";
-        }
-
-        if (priceDiff > 0) {
-            return `Til kun ${formatPrice(priceDiff)} mere får du ${improvements.join(", ")}.`;
-        } else if (priceDiff < 0) {
-            return `Spar ${formatPrice(Math.abs(priceDiff))} og få stadig ${improvements.join(", ")}!`;
-        }
-        return `Med denne får du ${improvements.join(", ")}.`;
-    };
-
+function VerdictBadge({ product1, product2 }: { product1: ProductWithMargin; product2: ProductWithMargin }) {
+  const score1 = (product1.upgradeScore || 0);
+  const score2 = (product2.upgradeScore || 0);
+  
+  if (score1 > score2) {
     return (
-        <div className="space-y-6 animate-fade-in">
-            {/* Header with seller toggle */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-bold text-white">Sammenligning</h2>
-                    {alternative.isHighMargin && (
-                        <Badge className="bg-gradient-to-r from-orange-500 to-amber-500 text-white border-0">
-                            <Star className="h-3 w-3 mr-1" />
-                            Anbefales
-                        </Badge>
-                    )}
-                </div>
-                <div className="flex items-center gap-3">
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowSellerView(!showSellerView)}
-                        className="text-slate-400 hover:text-white"
-                    >
-                        {showSellerView ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
-                        {showSellerView ? "Skjul Sælger Info" : "Vis Sælger Info"}
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={onClose}>
-                        Luk
-                    </Button>
-                </div>
-            </div>
-
-            {/* Quality info bar */}
-            {showSellerView && (
-                <Card className="bg-gradient-to-r from-blue-900/30 to-indigo-900/20 border-blue-500/30 p-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                                <Sparkles className="h-5 w-5 text-blue-400" />
-                                <span className="text-sm text-slate-300">Kvalitetsscore:</span>
-                                <span className="font-bold text-blue-400">{Math.round(alternative.upgradeScore || 75)}/100</span>
-                            </div>
-                            {alternative.isHighMargin && (
-                                <div className="flex items-center gap-2">
-                                    <Flame className="h-5 w-5 text-amber-400" />
-                                    <span className="text-sm font-medium text-amber-400">Populært valg</span>
-                                </div>
-                            )}
-                        </div>
-                        {alternative.upgradeScore && alternative.upgradeScore > 50 && (
-                            <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white border-0">
-                                <Star className="h-3 w-3 mr-1" />
-                                Top Anbefaling
-                            </Badge>
-                        )}
-                    </div>
-                </Card>
-            )}
-
-            {/* Side-by-side comparison */}
-            <div className="grid grid-cols-2 gap-6">
-                {/* Reference Product */}
-                <Card className="glass-card p-5 border-slate-700/50">
-                    <div className="text-center mb-4">
-                        <Badge variant="outline" className="mb-3 text-slate-400 border-slate-600">
-                            Kundens Valg
-                        </Badge>
-                        <h3 className="font-semibold text-white text-sm leading-tight line-clamp-2">
-                            {reference.name}
-                        </h3>
-                        <p className="text-2xl font-bold text-white mt-2">
-                            {formatPrice(reference.price)}
-                        </p>
-                    </div>
-
-                    <div className="space-y-3 mt-4">
-                        {specs.map((spec) => (
-                            <div key={spec.label} className="flex items-center justify-between text-sm">
-                                <div className="flex items-center gap-2 text-slate-400">
-                                    {spec.icon}
-                                    <span>{spec.label}</span>
-                                </div>
-                                <span className="text-slate-300 font-medium">
-                                    {spec.referenceValue}
-                                </span>
-                            </div>
-                        ))}
-                    </div>
-                </Card>
-
-                {/* Alternative Product */}
-                <Card className="glass-card p-5 border-orange-500/30 relative overflow-hidden">
-                    {/* Glow effect */}
-                    <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent pointer-events-none" />
-
-                    <div className="relative text-center mb-4">
-                        <Badge className="mb-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white border-0">
-                            <Star className="h-3 w-3 mr-1" />
-                            Vores Anbefaling
-                        </Badge>
-                        <h3 className="font-semibold text-white text-sm leading-tight line-clamp-2">
-                            {alternative.name}
-                        </h3>
-                        <p className="text-2xl font-bold text-orange-400 mt-2">
-                            {formatPrice(alternative.price)}
-                        </p>
-                        {priceDiff !== 0 && (
-                            <span className={`text-sm ${priceDiff > 0 ? 'text-orange-400' : 'text-green-400'}`}>
-                                {priceDiff > 0 ? '+' : ''}{formatPrice(priceDiff)} ({priceDiffPercent}%)
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="relative space-y-3 mt-4">
-                        {specs.map((spec) => {
-                            const status = getComparisonStatus(
-                                spec.referenceNumeric,
-                                spec.alternativeNumeric,
-                                spec.higherIsBetter
-                            );
-
-                            return (
-                                <div key={spec.label} className="flex items-center justify-between text-sm">
-                                    <div className="flex items-center gap-2 text-slate-400">
-                                        {spec.icon}
-                                        <span>{spec.label}</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className={`font-medium ${status === 'better' ? 'text-green-400' :
-                                            status === 'worse' ? 'text-slate-500' :
-                                                'text-slate-300'
-                                            }`}>
-                                            {spec.alternativeValue}
-                                        </span>
-                                        {status === 'better' && <TrendingUp className="h-3 w-3 text-green-400" />}
-                                        {status === 'worse' && <TrendingDown className="h-3 w-3 text-slate-500" />}
-                                        {status === 'same' && <Minus className="h-3 w-3 text-slate-500" />}
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </Card>
-            </div>
-
-            {/* Sales Pitch */}
-            <Card className="bg-gradient-to-r from-slate-800/80 to-slate-900/80 border-slate-700/50 p-5">
-                <div className="flex items-start gap-3">
-                    <div className="p-2 rounded-lg bg-orange-500/20">
-                        <ArrowRight className="h-5 w-5 text-orange-400" />
-                    </div>
-                    <div>
-                        <h4 className="font-semibold text-white mb-1">Salgstale</h4>
-                        <p className="text-slate-300 text-sm leading-relaxed">
-                            "{generateSalesPitch()}"
-                        </p>
-                    </div>
-                </div>
-            </Card>
-        </div>
+      <div className="text-center py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+        <span className="text-xs font-bold text-emerald-400">🏆 {product1.name.split(" ").slice(0, 3).join(" ")} vinder</span>
+      </div>
     );
+  }
+  if (score2 > score1) {
+    return (
+      <div className="text-center py-3 px-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+        <span className="text-xs font-bold text-emerald-400">🏆 {product2.name.split(" ").slice(0, 3).join(" ")} vinder</span>
+      </div>
+    );
+  }
+  return (
+    <div className="text-center py-3 px-4 rounded-xl bg-amber-500/10 border border-amber-500/20">
+      <span className="text-xs font-bold text-amber-400">⚖️ Lige værdi</span>
+    </div>
+  );
+}
+
+export function ComparisonView({ product1, product2 }: ComparisonViewProps) {
+  const specs1 = (product1.specs as any) || {};
+  const specs2 = (product2.specs as any) || {};
+
+  return (
+    <div className="space-y-4">
+      {/* Headers */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className={cn(
+          "p-4 rounded-xl border",
+          product1.isHighMargin 
+            ? "bg-amber-500/10 border-amber-500/20" 
+            : "bg-white/5 border-white/10"
+        )}>
+          <div className="text-xs text-muted-foreground mb-1">Produkt 1</div>
+          <div className="text-sm font-bold text-white line-clamp-2">{product1.name}</div>
+          <div className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400 mt-2">
+            {formatPrice(product1.price)}
+          </div>
+          {product1.isHighMargin && (
+            <span className="text-[9px] text-amber-400">🔥 {product1.marginReason}</span>
+          )}
+        </div>
+        
+        <div className={cn(
+          "p-4 rounded-xl border",
+          product2.isHighMargin 
+            ? "bg-amber-500/10 border-amber-500/20" 
+            : "bg-white/5 border-white/10"
+        )}>
+          <div className="text-xs text-muted-foreground mb-1">Produkt 2</div>
+          <div className="text-sm font-bold text-white line-clamp-2">{product2.name}</div>
+          <div className="text-lg font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400 mt-2">
+            {formatPrice(product2.price)}
+          </div>
+          {product2.isHighMargin && (
+            <span className="text-[9px] text-amber-400">🔥 {product2.marginReason}</span>
+          )}
+        </div>
+      </div>
+
+      {/* Verdict */}
+      <VerdictBadge product1={product1} product2={product2} />
+
+      {/* Spec Comparison */}
+      <div className="rounded-xl border border-white/10 bg-white/5 overflow-hidden">
+        <div className="grid grid-cols-3 gap-2 p-2 bg-white/5 border-b border-white/10">
+          <div className="text-[10px] text-center text-muted-foreground">Produkt 1</div>
+          <div className="text-[10px] text-center text-muted-foreground">Spec</div>
+          <div className="text-[10px] text-center text-muted-foreground">Produkt 2</div>
+        </div>
+        
+        <div className="p-2">
+          <SpecRow label="CPU" icon={Cpu} value1={specs1.cpu?.split(" ").slice(-2).join(" ")} value2={specs2.cpu?.split(" ").slice(-2).join(" ")} tier1={specs1.cpuTier} tier2={specs2.cpuTier} />
+          <SpecRow label="RAM" icon={MemoryStick} value1={`${specs1.ramGB || "?"}GB`} value2={`${specs2.ramGB || "?"}GB`} tier1={specs1.ramGB} tier2={specs2.ramGB} />
+          <SpecRow label="Lager" icon={HardDrive} value1={`${specs1.storageGB || "?"}GB`} value2={`${specs2.storageGB || "?"}GB`} tier1={specs1.storageGB} tier2={specs2.storageGB} />
+          <SpecRow label="GPU" icon={Monitor} value1={specs1.gpu?.split(" ").slice(-2).join(" ") || "Integreret"} value2={specs2.gpu?.split(" ").slice(-2).join(" ") || "Integreret"} tier1={specs1.gpuTier} tier2={specs2.gpuTier} />
+          <SpecRow label="Score" icon={Zap} value1={product1.upgradeScore || 0} value2={product2.upgradeScore || 0} tier1={product1.upgradeScore} tier2={product2.upgradeScore} />
+        </div>
+      </div>
+
+      {/* Price diff */}
+      <div className="text-center text-xs text-muted-foreground">
+        Prisforskel: {formatPrice(Math.abs(product2.price - product1.price))}
+        {product2.price > product1.price ? " (Produkt 2 dyrere)" : " (Produkt 1 dyrere)"}
+      </div>
+    </div>
+  );
 }
