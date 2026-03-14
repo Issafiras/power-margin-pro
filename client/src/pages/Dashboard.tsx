@@ -10,9 +10,10 @@ import { AlternativesTable } from "@/components/AlternativesTable";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Brain } from "lucide-react";
 import type { SearchResponse } from "@shared/schema";
 import { MarginChart } from "@/components/dashboard/MarginChart";
+import { KnowledgeExplorer } from "@/components/KnowledgeExplorer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
@@ -315,6 +316,9 @@ export default function Dashboard() {
                         <TabsTrigger value="specs" className="text-[10px] px-3 h-5 data-[state=active]:bg-primary/20 data-[state=active]:text-primary">
                           Specs
                         </TabsTrigger>
+                        <TabsTrigger value="knowledge" className="text-[10px] px-3 h-5 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-400">
+                          🧠 Viden
+                        </TabsTrigger>
                       </TabsList>
                     </div>
                     <Badge variant="outline" className="text-[10px] gap-1.5 px-2.5 py-0.5 border-white/10 bg-white/5 backdrop-blur-sm">
@@ -337,6 +341,10 @@ export default function Dashboard() {
                     <div className="h-40 glass flex items-center justify-center text-muted-foreground text-sm">
                       Detaljeret specifikationsvisning kommer snart
                     </div>
+                  </TabsContent>
+
+                  <TabsContent value="knowledge" className="h-full mt-0">
+                    <KnowledgeExplorer />
                   </TabsContent>
                 </Tabs>
               </motion.div>
