@@ -1,20 +1,13 @@
 {
-    "version": 2,
-    "outputDirectory": "dist/public",
-    "functions": {
-        "dist/api/index.js": {
-            "includeFiles": "dist/public/**",
-            "maxDuration": 60
-        }
-    },
-    "rewrites": [
-        {
-            "source": "/api/(.*)",
-            "destination": "/dist/api/index"
-        },
-        {
-            "source": "/((?!api/.*).*)",
-            "destination": "/index.html"
-        }
-    ]
+    "version": 3,
+    "buildCommand": "npm run build",
+    "outputDirectory": ".vercel/output/static",
+    "installCommand": "npm install",
+    "framework": null,
+    "env": {
+        "DATABASE_URL": "@database_url",
+        "VITE_SUPABASE_URL": "@vite_supabase_url",
+        "VITE_SUPABASE_ANON_KEY": "@vite_supabase_anon_key",
+        "OPENROUTER_API_KEY": "@openrouter_api_key"
+    }
 }
