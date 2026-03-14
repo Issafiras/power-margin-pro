@@ -86,7 +86,7 @@ Svar KUN med gyldig JSON (ingen markdown):
         "X-Title": "Power Margin Pro"
       },
       body: JSON.stringify({
-        model: "anthropic/claude-sonnet-4",
+        model: "openrouter/hunter-alpha",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
         max_tokens: 800,
