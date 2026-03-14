@@ -128,7 +128,7 @@ class KnowledgeStorage {
     if (priceStr.endsWith("99")) {
       return { bonus: 0, reason: "Standard retail pricing" };
     }
-    if (price.endsWith(0) && price % 1000 === 0) {
+    if (price % 1000 === 0) {
       return { bonus: -10, reason: "Rund pris — kampagne/lav margin" };
     }
     
