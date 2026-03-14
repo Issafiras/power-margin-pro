@@ -858,7 +858,6 @@ export async function registerRoutes(
         maxPrice
       });
 
-      // Score each alternative
       const scoredAlternatives = alternatives.map(alt => ({
         ...alt,
         scores: scoreAlternative(alt)
@@ -873,6 +872,42 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("AI alternatives error:", error);
       res.status(500).json({ error: error.message, alternatives: [] });
+    }
+  });
+
+  // Knowledge Base API
+  app.get("/api/knowledge/search", async (req, res) => {
+    try {
+      const { knowledgeStorage } = await import("./storage/knowledge");
+      const q = req.query.q as string;
+      const category = req.query.category as string;
+      
+      if (!q) return res.status(400).json({ error: "Mangler søgeord" });
+      
+      const results = await knowledgeStorage.searchKnowledge(q, category);
+      res.json({ results, count: results.length });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/knowledge/brands", async (req, res) => {
+    try {
+      const { knowledgeStorage } = await import("./storage/knowledge");
+      const brands = await knowledgeStorage.getAllBrandMargins();
+      res.json({ brands });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/knowledge/categories", async (req, res) => {
+    try {
+      const { knowledgeStorage } = await import("./storage/knowledge");
+      const categories = await knowledgeStorage.getAllCategories();
+      res.json({ categories });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
