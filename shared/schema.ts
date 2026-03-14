@@ -124,3 +124,93 @@ export const cpuBenchmarks = pgTable("cpu_benchmarks", {
 export const insertCpuBenchmarkSchema = createInsertSchema(cpuBenchmarks).omit({ updatedAt: true });
 export type InsertCpuBenchmark = z.infer<typeof insertCpuBenchmarkSchema>;
 export type DbCpuBenchmark = typeof cpuBenchmarks.$inferSelect;
+
+// ============================================
+// AI KNOWLEDGE BASE TABLES
+// ============================================
+
+// Brand margin information
+export const brandMargins = pgTable("brand_margins", {
+  id: text("id").primaryKey(),
+  brandName: text("brand_name").notNull().unique(),
+  marginTier: text("margin_tier").notNull(), // "highest", "high", "medium", "low"
+  marginPercent: real("margin_percent"), // Estimated margin %
+  isHouseBrand: boolean("is_house_brand").default(false), // Power's own brands
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertBrandMarginSchema = createInsertSchema(brandMargins).omit({ updatedAt: true });
+export type InsertBrandMargin = z.infer<typeof insertBrandMarginSchema>;
+export type DbBrandMargin = typeof brandMargins.$inferSelect;
+
+// Price patterns for margin detection
+export const marginPricePatterns = pgTable("margin_price_patterns", {
+  id: text("id").primaryKey(),
+  pattern: text("pattern").notNull(), // e.g., "ends_with_92", "ends_with_98"
+  description: text("description").notNull(),
+  marginBonus: real("margin_bonus").notNull(), // Score bonus
+  examples: text("examples").array(), // Example prices
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMarginPatternSchema = createInsertSchema(marginPricePatterns).omit({ updatedAt: true });
+export type InsertMarginPattern = z.infer<typeof insertMarginPatternSchema>;
+export type DbMarginPattern = typeof marginPricePatterns.$inferSelect;
+
+// AI knowledge entries - what the AI knows about laptops
+export const aiKnowledgeBase = pgTable("ai_knowledge_base", {
+  id: text("id").primaryKey(),
+  category: text("category").notNull(), // "laptop_model", "cpu_info", "gpu_info", "use_case", "upgrade_tip"
+  title: text("title").notNull(),
+  content: text("content").notNull(), // The actual knowledge
+  tags: text("tags").array(), // For searchability
+  priority: real("priority").default(50), // Higher = more important
+  embedding: jsonb("embedding"), // For future vector search
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => {
+  return {
+    categoryIdx: index("knowledge_category_idx").on(table.category),
+    tagsIdx: index("knowledge_tags_idx").on(table.tags),
+  };
+});
+
+export const insertAiKnowledgeSchema = createInsertSchema(aiKnowledgeBase).omit({ updatedAt: true });
+export type InsertAiKnowledge = z.infer<typeof insertAiKnowledgeSchema>;
+export type DbAiKnowledge = typeof aiKnowledgeBase.$inferSelect;
+
+// Laptop categories and use cases
+export const laptopCategories = pgTable("laptop_categories", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(), // "Gaming", "Business", "Student", "Creative"
+  description: text("description").notNull(),
+  minRamGB: real("min_ram_gb"),
+  recommendedRamGB: real("recommended_ram_gb"),
+  minCpuTier: real("min_cpu_tier"),
+  recommendedCpuTier: real("recommended_cpu_tier"),
+  needsDedicatedGpu: boolean("needs_dedicated_gpu").default(false),
+  importantFeatures: text("important_features").array(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertLaptopCategorySchema = createInsertSchema(laptopCategories).omit({ updatedAt: true });
+export type InsertLaptopCategory = z.infer<typeof insertLaptopCategorySchema>;
+export type DbLaptopCategory = typeof laptopCategories.$inferSelect;
+
+// Common upgrade paths
+export const upgradePaths = pgTable("upgrade_paths", {
+  id: text("id").primaryKey(),
+  fromTier: text("from_tier").notNull(), // "budget", "mid_range", "high_end"
+  toTier: text("to_tier").notNull(),
+  fromSpecs: jsonb("from_specs").$type<ProductSpecs>(),
+  toSpecs: jsonb("to_specs").$type<ProductSpecs>(),
+  priceRangeMin: real("price_range_min"),
+  priceRangeMax: real("price_range_max"),
+  recommendation: text("recommendation").notNull(), // Why this upgrade makes sense
+  targetAudience: text("target_audience"), // Who benefits from this upgrade
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUpgradePathSchema = createInsertSchema(upgradePaths).omit({ updatedAt: true });
+export type InsertUpgradePath = z.infer<typeof insertUpgradePathSchema>;
+export type DbUpgradePath = typeof upgradePaths.$inferSelect;
