@@ -911,6 +911,17 @@ export async function registerRoutes(
     }
   });
 
+  // Daily Market Report
+  app.get("/api/reports/daily", async (req, res) => {
+    try {
+      const { generateDailyReport } = await import("./services/dailyReport");
+      const report = await generateDailyReport();
+      res.json(report);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // DB Connection test endpoint
   app.get("/api/db/test-connection", async (req, res) => {
     if (!dbConfigured) {
