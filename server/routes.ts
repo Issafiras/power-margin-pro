@@ -807,7 +807,17 @@ export async function registerRoutes(
 
   // Health check endpoint (No DB required)
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      version: "1.1.0",
+      features: {
+        database: dbConfigured,
+        openai: !!process.env.OPENAI_API_KEY,
+        gpuCache: gpuScoreCache.size,
+        cpuCache: cpuScoreCache.size
+      }
+    });
   });
 
   // DB Connection test endpoint
@@ -1444,7 +1454,7 @@ export async function registerRoutes(
   });
 
 
-  // AI Pitch Generation endpoint (Deterministic fallback - Puppeteer removed for Vercel compatibility)
+  // AI Pitch Generation endpoint (Enhanced with OpenAI support)
   app.post("/api/generate-pitch", async (req, res) => {
     try {
       const { mainProduct, topPick } = req.body;
@@ -1453,45 +1463,17 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Missing mainProduct or topPick in request body" });
       }
 
-      const priceDiff = topPick.priceDifference || (topPick.price - mainProduct.price);
-      const dailyCost = Math.round(priceDiff / 365);
+      const { generateEnhancedPitch } = await import("./services/pitchGenerator");
+      const pitch = await generateEnhancedPitch({ mainProduct, topPick });
 
-      let valuePitch = "";
-      let lossPitch = "";
-      let futurePitch = "";
-
-      // Value Pitch Logic
-      if (priceDiff > 0) {
-        valuePitch = `For kun ${dailyCost} kr om dagen får du en maskine der er langt hurtigere. Det er en lille pris for at undgå ventetid i hverdagen.`;
-      } else {
-        valuePitch = `Du sparer ${Math.abs(priceDiff)} kr og får samtidig en bedre maskine. Det er en ren win-win situation.`;
-      }
-
-      // Loss Aversion Logic
-      if ((mainProduct.specs?.ramGB || 0) < 16 && (topPick.specs?.ramGB || 0) >= 16) {
-        lossPitch = "Den billige model har kun 8GB RAM - det bliver hurtigt en flaskehals. Med 16GB slipper du for at den hakker når du har mange faner åbne.";
-      } else if ((mainProduct.specs?.storageGB || 0) < 512 && (topPick.specs?.storageGB || 0) >= 512) {
-        lossPitch = "256GB lager bliver fyldt overraskende hurtigt. Med 512GB undgår du at skulle slette dine filer og billeder om et år.";
-      } else {
-        lossPitch = "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom. Denne opgradering sikrer den gode oplevelse.";
-      }
-
-      // Future Proofing Logic
-      futurePitch = `Denne model er bygget med nyere komponenter der holder 2-3 år længere. Det er billigere end at skulle skifte computeren ud før tid.`;
-
-      res.json({
-        valuePitch,
-        lossAversionPitch: lossPitch,
-        futureProofingPitch: futurePitch,
-        isAiGenerated: false
-      });
-
+      res.json(pitch);
     } catch (error: any) {
       console.error("Pitch generation error:", error.message);
       res.status(500).json({
         valuePitch: "Denne opgradering giver dig bedre ydelse til en fornuftig pris.",
         lossAversionPitch: "Mange fortryder at spare de sidste penge, når computeren begynder at blive langsom.",
         futureProofingPitch: "Nyere komponenter holder længere - det er billigere end at skifte før tid.",
+        objectionHandlers: [],
         isAiGenerated: false
       });
     }
