@@ -843,6 +843,39 @@ export async function registerRoutes(
     }
   });
 
+  // AI-Powered Alternatives endpoint
+  app.post("/api/ai-alternatives", async (req, res) => {
+    try {
+      const { findAIAlternatives, scoreAlternative } = await import("./services/aiAlternatives");
+      const { product, maxPrice } = req.body;
+
+      if (!product) {
+        return res.status(400).json({ error: "Mangler produkt data" });
+      }
+
+      const alternatives = await findAIAlternatives({
+        referenceProduct: product,
+        maxPrice
+      });
+
+      // Score each alternative
+      const scoredAlternatives = alternatives.map(alt => ({
+        ...alt,
+        scores: scoreAlternative(alt)
+      }));
+
+      res.json({
+        reference: product.name,
+        alternatives: scoredAlternatives,
+        count: scoredAlternatives.length,
+        aiGenerated: true
+      });
+    } catch (error: any) {
+      console.error("AI alternatives error:", error);
+      res.status(500).json({ error: error.message, alternatives: [] });
+    }
+  });
+
   // DB Connection test endpoint
   app.get("/api/db/test-connection", async (req, res) => {
     if (!dbConfigured) {
