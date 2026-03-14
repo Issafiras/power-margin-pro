@@ -810,14 +810,37 @@ export async function registerRoutes(
     res.json({ 
       status: "ok", 
       timestamp: new Date().toISOString(),
-      version: "1.1.0",
+      version: "1.2.0",
       features: {
         database: dbConfigured,
-        openai: !!process.env.OPENAI_API_KEY,
+        openrouter: !!process.env.OPENROUTER_API_KEY,
         gpuCache: gpuScoreCache.size,
         cpuCache: cpuScoreCache.size
       }
     });
+  });
+
+  // Product Insights endpoint
+  app.get("/api/insights/:productId", async (req, res) => {
+    try {
+      const { analyzeProduct } = await import("./services/productInsights");
+      
+      if (dbConfigured) {
+        const product = await storage.getProductById(req.params.productId);
+        if (product) {
+          const insight = analyzeProduct({
+            name: product.name,
+            price: product.price,
+            specs: (product.specs as any) || {}
+          });
+          return res.json(insight);
+        }
+      }
+      
+      res.status(404).json({ error: "Produkt ikke fundet" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
   // DB Connection test endpoint
