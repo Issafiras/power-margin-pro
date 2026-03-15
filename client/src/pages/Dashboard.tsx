@@ -336,10 +336,13 @@ export default function Dashboard() {
                         </TabsTrigger>
                       </TabsList>
                     </div>
-                    <Badge variant="outline" className="text-[10px] gap-1.5 px-2.5 py-0.5 border-white/10 bg-white/5 backdrop-blur-sm">
-                      <Sparkles className="h-3 w-3 text-amber-400" />
-                      {alternatives.length} fundet
-                    </Badge>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="text-[10px] gap-1.5 px-2.5 py-0.5 border-white/10 bg-white/5 backdrop-blur-sm">
+                        <Sparkles className="h-3 w-3 text-amber-400" />
+                        {alternatives.length} fundet
+                      </Badge>
+                      <CopilotFilter activeFilter={copilotFilter} onFilterChange={setCopilotFilter} />
+                    </div>
                   </div>
 
                   <TabsContent value="alternatives" className="h-full mt-0">
