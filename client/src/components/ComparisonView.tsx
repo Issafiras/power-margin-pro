@@ -1,7 +1,8 @@
 // Product Comparison View
 // Side-by-side comparison med AI analyse
 
-import { Cpu, MemoryStick, HardDrive, Monitor, Zap, CheckCircle2, XCircle, Minus } from "lucide-react";
+import { Cpu, MemoryStick, HardDrive, Monitor, Zap, CheckCircle2, XCircle, Minus, Brain } from "lucide-react";
+import { CopilotReadiness } from "./CopilotReadiness";
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/lib/specExtractor";
 import type { ProductWithMargin } from "@shared/schema";
@@ -152,6 +153,12 @@ export function ComparisonView({ product1, product2 }: ComparisonViewProps) {
       <div className="text-center text-xs text-muted-foreground">
         Prisforskel: {formatPrice(Math.abs(product2.price - product1.price))}
         {product2.price > product1.price ? " (Produkt 2 dyrere)" : " (Produkt 1 dyrere)"}
+      </div>
+
+      {/* Copilot Readiness Comparison */}
+      <div className="grid grid-cols-2 gap-4">
+        <CopilotReadiness specs={specs1} priceDiff={0} />
+        <CopilotReadiness specs={specs2} priceDiff={product2.price - product1.price} />
       </div>
     </div>
   );
