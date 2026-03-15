@@ -1581,6 +1581,25 @@ export async function registerRoutes(
     }
   });
 
+  // Copilot Readiness Score endpoint
+  app.post("/api/copilot-score", async (req, res) => {
+    try {
+      const { calculateCopilotReadiness, generateCopilotPitch } = await import("./services/copilotReadiness");
+      const { specs, priceDiff } = req.body;
+      
+      if (!specs) {
+        return res.status(400).json({ error: "Mangler specs" });
+      }
+      
+      const score = calculateCopilotReadiness(specs);
+      const pitch = generateCopilotPitch(score, priceDiff || 0);
+      
+      res.json({ ...score, pitch });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // PDF Export endpoint
   app.post("/api/export/pdf", async (req, res) => {
     try {
