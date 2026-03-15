@@ -151,10 +151,13 @@ function getCpuTier(cpuString: string): number {
   if (/celeron|pentium|athlon|amd\s+a\d|intel\s+n\d{2,4}/i.test(cpu)) return 1;
 
   // Tier S (Workstation/Ultimate) - Score 10
-  if (/apple\s+m[34]\s*(max|ultra)/i.test(cpu)) return 10;
+  if (/apple\s+m[345]\s*(max|ultra)/i.test(cpu)) return 10;
+  if (/apple\s+m4\s*pro/i.test(cpu)) return 10; // M4 Pro er tæt på M3 Max
+  if (/core\s+ultra\s+9\s*285/i.test(cpu)) return 10; // Arrow Lake Ultra 9
   if (/core\s+ultra\s+9/i.test(cpu)) return 10;
-  if (/i9[- ]?(1\d)\d{3}hx/i.test(cpu)) return 10;
-  if (/ryzen\s+9.*\d{4}hx/i.test(cpu)) return 10;
+  if (/i9[- ]?(1[3-9])\d{3}hx/i.test(cpu)) return 10; // 13th-19th gen HX
+  if (/ryzen\s+9.*[789]\d{3}hx/i.test(cpu)) return 10; // Ryzen 9 HX series
+  if (/ryzen\s+ai\s+9\s*(hx\s*)?3\d{2}/i.test(cpu)) return 10; // Ryzen AI 9 HX 370/365
   if (/snapdragon\s+x\s*elite/i.test(cpu)) return 10;
   // Specific Ryzen AI 300 high-end (Ryzen AI 9 HX 370 etc)
   if (/ryzen\s+ai\s+9\s+3\d{2}/i.test(cpu)) return 10;
@@ -232,11 +235,14 @@ function getGpuTier(gpuString: string): number {
   // Fallback to legacy regex logic if no DB match found
   const gpu = gpuString.toLowerCase();
 
-  // 50-series (Blackwell) - 2025 Flagships
-  if (/rtx\s*5090/i.test(gpu)) return 9;
-  if (/rtx\s*5080/i.test(gpu)) return 8;
+  // 50-series (Blackwell) - 2025/2026 Flagships
+  if (/rtx\s*5090/i.test(gpu)) return 10;
+  if (/rtx\s*5080/i.test(gpu)) return 9;
+  if (/rtx\s*5070\s*t[ií]/i.test(gpu)) return 8;
   if (/rtx\s*5070/i.test(gpu)) return 7;
+  if (/rtx\s*5060\s*t[ií]/i.test(gpu)) return 7;
   if (/rtx\s*5060/i.test(gpu)) return 6;
+  if (/rtx\s*5050/i.test(gpu)) return 5;
 
   // 40-series
   if (/rtx\s*4090/i.test(gpu)) return 8;
@@ -255,11 +261,22 @@ function getGpuTier(gpuString: string): number {
   if (/gtx\s*16\d{2}/i.test(gpu)) return 3;
   if (/rtx\s*2050/i.test(gpu)) return 3;
 
-  // Integrated / Basic
-  if (/intel\s+arc\s+a\d+/i.test(gpu)) return 4; // Arc dedicated is decent
+  // AMD Radeon RX 7000/9000 series
+  if (/radeon\s+rx\s*9070/i.test(gpu)) return 7;
+  if (/radeon\s+rx\s*7900/i.test(gpu)) return 7;
+  if (/radeon\s+rx\s*7800/i.test(gpu)) return 6;
+  if (/radeon\s+rx\s*7700/i.test(gpu)) return 5;
+  if (/radeon\s+rx\s*7600/i.test(gpu)) return 4;
+
+  // Intel Arc
+  if (/intel\s+arc\s+a\d+/i.test(gpu)) return 4; // Arc Alchemist dedicated
+  if (/arc\s+b580/i.test(gpu)) return 5; // Arc Battlemage
+  if (/arc\s+b570/i.test(gpu)) return 4;
   if (/radeon\s+rx\s*6\d{2}0/i.test(gpu)) return 4;
 
-  if (/intel\s+(?:iris|uhd|arc)/i.test(gpu) || /radeon\s+graphics/i.test(gpu)) return 1;
+  // Integrated / Basic
+  if (/intel\s+(?:iris|uhd)/i.test(gpu) || /radeon\s+graphics/i.test(gpu)) return 1;
+  if (/intel\s+arc\s+(?:integrated|graphics)/i.test(gpu)) return 2;
 
   return 0; // Unknown or integrated
 }
