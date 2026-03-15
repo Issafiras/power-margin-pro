@@ -113,7 +113,7 @@ Svar KUN med gyldig JSON array (ingen markdown):
         "X-Title": "Power Margin Pro - AI Alternatives v2"
       },
       body: JSON.stringify({
-        model: "openrouter/hunter-alpha",
+        model: "nvidia/nemotron-3-nano-30b-a3b:free",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.8,
         max_tokens: 2500,

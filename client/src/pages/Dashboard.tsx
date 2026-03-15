@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { Sparkles, Brain } from "lucide-react";
+import { CopilotFilter } from "@/components/CopilotFilter";
 import type { SearchResponse } from "@shared/schema";
 import { MarginChart } from "@/components/dashboard/MarginChart";
 import { KnowledgeExplorer } from "@/components/KnowledgeExplorer";
@@ -200,9 +201,23 @@ export default function Dashboard() {
   };
 
   const [selectedAlternativeId, setSelectedAlternativeId] = useState<string | null>(null);
+  const [copilotFilter, setCopilotFilter] = useState<string | null>(null);
 
   const mainProduct = data?.products?.[0];
-  const alternatives = data?.products?.slice(1) || [];
+  const allAlternatives = data?.products?.slice(1) || [];
+  
+  // Filter alternatives by Copilot tier (if filter active)
+  const alternatives = copilotFilter
+    ? allAlternatives.filter(a => {
+        const cpu = (a.specs as any)?.cpu?.toLowerCase() || '';
+        const ramGB = (a.specs as any)?.ramGB || 0;
+        // Quick tier check based on specs
+        if (copilotFilter === 'ai-pro') return /snapdragon\s+x\s*elite|ryzen\s+ai\s+9|core\s+ultra\s+9/i.test(cpu) || ramGB >= 32;
+        if (copilotFilter === 'copilot+') return /core\s+ultra|ryzen\s+ai|snapdragon\s+x/i.test(cpu) || ramGB >= 16;
+        if (copilotFilter === 'ready') return ramGB >= 8;
+        return true;
+      })
+    : allAlternatives;
 
   // Default to top pick if nothing selected
   const topPick = alternatives.find(a => a.isTopPick) || alternatives[0];
