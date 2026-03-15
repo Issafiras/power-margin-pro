@@ -37,10 +37,12 @@ interface ExtractedSpecs {
 }
 
 
-// GPU Score Cache
-const gpuScoreCache = new Map<string, number>();
-// CPU Score Cache
-const cpuScoreCache = new Map<string, number>();
+import { TTLCache, createGpuCache, createCpuCache } from "./services/ttlCache";
+
+// GPU Score Cache — auto-expire efter 1 time
+const gpuScoreCache = createGpuCache();
+// CPU Score Cache — auto-expire efter 1 time
+const cpuScoreCache = createCpuCache();
 
 function normalizeCpuName(name: string): string {
   return name.toLowerCase()
